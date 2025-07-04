@@ -160,6 +160,24 @@ function toThreeUniform(type, value, name, uniforms, textureLoader, searchPath, 
                         undefined,
                         function (error) {
                             console.error('Error loading texture: ', error);
+
+                            // Create single-pixel texture as fallback
+                            // TODO figure out how to set the correct fallback color.
+                            // Fallback color is per image node, not per texture,
+                            // so it would need to be in a different place.
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 1;
+                            canvas.height = 1;
+                            const context = canvas.getContext('2d');
+                            context.fillStyle = 'white';
+                            context.fillRect(0, 0, 1, 1);
+                            
+                            // Update outValue with canvas image
+                            outValue.image = canvas;
+                            outValue.needsUpdate = true;
+                            
+                            if (checkCache)
+                                THREE.Cache.add(texturePath, outValue);
                         });     
 
                     // Set address & filtering mode
