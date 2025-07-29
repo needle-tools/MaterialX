@@ -25,6 +25,13 @@ void MaterialNode::addClassification(ShaderNode& node) const
         const ShaderNode* surfaceshaderNode = surfaceshaderInput->getConnection()->getNode();
         node.addClassification(surfaceshaderNode->getClassification());
     }
+
+    const ShaderInput* displacementshaderInput = node.getInput(ShaderNode::DISPLACEMENTSHADER);
+    if (displacementshaderInput && displacementshaderInput->getConnection())
+    {
+        const ShaderNode* displacementshaderNode = displacementshaderInput->getConnection()->getNode();
+        node.addClassification(displacementshaderNode->getClassification());
+    }
 }
 
 void MaterialNode::emitFunctionCall(const ShaderNode& _node, GenContext& context, ShaderStage& stage) const

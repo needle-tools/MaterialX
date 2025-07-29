@@ -7,11 +7,13 @@
 
 #include <MaterialXGenGlsl/GlslSyntax.h>
 #include <MaterialXGenGlsl/Nodes/SurfaceNodeGlsl.h>
+#include <MaterialXGenGlsl/Nodes/DisplacementNodeGlsl.h>
 #include <MaterialXGenGlsl/Nodes/LightNodeGlsl.h>
 #include <MaterialXGenGlsl/Nodes/LightCompoundNodeGlsl.h>
 #include <MaterialXGenGlsl/Nodes/LightShaderNodeGlsl.h>
 #include <MaterialXGenGlsl/Nodes/LightSamplerNodeGlsl.h>
 #include <MaterialXGenGlsl/Nodes/NumLightsNodeGlsl.h>
+#include <iostream>
 
 #include <MaterialXGenShader/Nodes/MaterialNode.h>
 #include <MaterialXGenShader/Nodes/HwImageNode.h>
@@ -84,6 +86,10 @@ GlslShaderGenerator::GlslShaderGenerator(TypeSystemPtr typeSystem) :
 
     // <!-- <surface> -->
     registerImplementation("IM_surface_" + GlslShaderGenerator::TARGET, SurfaceNodeGlsl::create);
+
+    // <!-- <displacement> -->
+    registerImplementation("IM_displacement_float_" + GlslShaderGenerator::TARGET, DisplacementNodeGlsl::create);
+    registerImplementation("IM_displacement_vector3_" + GlslShaderGenerator::TARGET, DisplacementNodeGlsl::create);
 
     // <!-- <light> -->
     registerImplementation("IM_light_" + GlslShaderGenerator::TARGET, LightNodeGlsl::create);
@@ -178,13 +184,43 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
     setFunctionName("main", stage);
     emitLine("void main()", stage, false);
     emitFunctionBodyBegin(graph, context, stage);
-    emitLine("vec4 hPositionWorld = " + HW::T_WORLD_MATRIX + " * vec4(" + HW::T_IN_POSITION + ", 1.0)", stage);
-    emitLine("gl_Position = " + HW::T_VIEW_PROJECTION_MATRIX + " * hPositionWorld", stage);
-
-    // Emit all function calls in order
+    
+    // Check for displacement nodes and handle vertex position accordingly
+    const ShaderNode* displacementNode = nullptr;
+    std::cout << "DEBUG: Checking for displacement nodes in graph with " << graph.getNodes().size() << " nodes" << std::endl;
     for (const ShaderNode* node : graph.getNodes())
     {
-        emitFunctionCall(*node, context, stage);
+        std::cout << "DEBUG: Node " << node->getName() << " - type: " << node->getOutput()->getType().getName() << ", classification: " << (node->hasClassification(ShaderNode::Classification::SHADER) ? "SHADER" : "OTHER") << std::endl;
+        if (node->getOutput()->getType() == Type::DISPLACEMENTSHADER)
+        {
+            displacementNode = node;
+            std::cout << "DEBUG: Found displacement node: " << node->getName() << std::endl;
+            break;
+        }
+    }
+    
+    std::cout << "DEBUG: displacementNode = " << (displacementNode ? displacementNode->getName() : "nullptr") << std::endl;
+    
+    if (displacementNode)
+    {
+        // Emit displacement computation first
+        std::cout << "DEBUG: GlslShaderGenerator found displacement node: " << displacementNode->getName() << std::endl;
+        std::cout << "DEBUG: About to call emitFunctionCall on displacement node" << std::endl;
+        emitFunctionCall(*displacementNode, context, stage);
+        
+        // Apply displacement to vertex position
+        const string& displacementVar = displacementNode->getOutput()->getVariable();
+        std::cout << "DEBUG: Displacement variable: " << displacementVar << std::endl;
+        emitComment("Apply vertex displacement", stage);
+        emitLine("vec3 displacedPosition = " + HW::T_IN_POSITION + " + " + displacementVar + ".offset * " + displacementVar + ".scale", stage);
+        emitLine("vec4 hPositionWorld = " + HW::T_WORLD_MATRIX + " * vec4(displacedPosition, 1.0)", stage);
+        emitLine("gl_Position = " + HW::T_VIEW_PROJECTION_MATRIX + " * hPositionWorld", stage);
+    }
+    else
+    {
+        // Standard vertex position transformation
+        emitLine("vec4 hPositionWorld = " + HW::T_WORLD_MATRIX + " * vec4(" + HW::T_IN_POSITION + ", 1.0)", stage);
+        emitLine("gl_Position = " + HW::T_VIEW_PROJECTION_MATRIX + " * hPositionWorld", stage);
     }
 
     emitFunctionBodyEnd(graph, context, stage);

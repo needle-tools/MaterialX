@@ -91,7 +91,7 @@ void SourceCodeNode::emitFunctionDefinition(const ShaderNode&, GenContext& conte
         return;
     }
 
-    DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
+    // DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
     {
         if (!stage.hasSourceDependency(_sourceFilename))
         {
@@ -105,7 +105,7 @@ void SourceCodeNode::emitFunctionDefinition(const ShaderNode&, GenContext& conte
 
 void SourceCodeNode::emitFunctionCall(const ShaderNode& node, GenContext& context, ShaderStage& stage) const
 {
-    DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
+    // DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
     {
         const ShaderGenerator& shadergen = context.getShaderGenerator();
 
