@@ -32,8 +32,8 @@ class GlslShaderGeneratorTester : public GenShaderUtil::ShaderGeneratorTester
     // Ignore trying to create shader code for displacementshaders
     void addSkipNodeDefs() override
     {
-        _skipNodeDefs.insert("ND_displacement_float");
-        _skipNodeDefs.insert("ND_displacement_vector3");
+        // _skipNodeDefs.insert("ND_displacement_float");
+        // _skipNodeDefs.insert("ND_displacement_vector3");
         ParentClass::addSkipNodeDefs();
     }
 
