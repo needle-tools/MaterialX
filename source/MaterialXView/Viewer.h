@@ -120,6 +120,12 @@ class Viewer : public ng::Screen
         _lightRotation = rotation;
     }
 
+    // Enable or disable direct lighting.
+    void setDirectLightEnable(bool enable)
+    {
+        _lightHandler->setDirectLighting(enable);
+    }
+
     // Enable or disable shadow maps.
     void setShadowMapEnable(bool enable)
     {
