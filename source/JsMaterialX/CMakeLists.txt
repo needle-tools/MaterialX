@@ -220,8 +220,13 @@ patch_file() {
     local file="$1"
     if [ -f "$file" ]; then
         echo "Patching $file..."
+        # 1. Replace arrow function wrapper with regular function (for ES6 compat)
         sed -i '' 's/var MaterialX = (() => {/var MaterialX = (function() {/' "$file"
+        # 2. Replace moduleArg parameter with MaterialX (emscripten 3.x uses moduleArg)
         sed -i '' 's/function(moduleArg = {}) {/function(MaterialX) {\n  MaterialX = MaterialX || {};/' "$file"
+        # 3. Replace all remaining moduleArg references with MaterialX
+        sed -i '' 's/moduleArg/MaterialX/g' "$file"
+        # 4. Add ES6 default export
         if ! grep -q "export default MaterialX;" "$file"; then
             echo "export default MaterialX;" >> "$file"
         fi
@@ -230,6 +235,13 @@ patch_file() {
 
 patch_file "$INSTALL_DIR/JsMaterialXCore.js"
 patch_file "$INSTALL_DIR/JsMaterialXGenShader.js"
+
+# Rename .data to .data.txt so Vite can serve/import it with ?url
+if [ -f "$INSTALL_DIR/JsMaterialXGenShader.data" ]; then
+    mv "$INSTALL_DIR/JsMaterialXGenShader.data" "$INSTALL_DIR/JsMaterialXGenShader.data.txt"
+    echo "Renamed JsMaterialXGenShader.data -> JsMaterialXGenShader.data.txt"
+fi
+
 echo "Done patching JS files."
 ]])
     
