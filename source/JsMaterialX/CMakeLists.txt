@@ -178,3 +178,67 @@ install(FILES ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/JsMaterialXCore.js DE
 
 install(FILES ${PROJECT_BINARY_DIR}/bin/JsMaterialXGenShader.js DESTINATION ${PROJECT_BINARY_DIR}/ RENAME JsMaterialXGenShader-${MATERIALX_LIBRARY_VERSION}.js)
 install(FILES ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/JsMaterialXGenShader.js DESTINATION JavaScript/MaterialX/ RENAME JsMaterialXGenShader-${MATERIALX_LIBRARY_VERSION}.js)
+
+# Option to patch JS files for ES6 module compatibility (needed for Needle Engine)
+option(MATERIALX_BUILD_JS_PATCH_FOR_NEEDLE "Patch JS files for ES6 module compatibility (adds export default and fixes arrow function)" OFF)
+
+if(MATERIALX_BUILD_JS_PATCH_FOR_NEEDLE)
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            OUTPUT_VARIABLE GIT_COMMIT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+    endif()
+    
+    if(NOT GIT_COMMIT)
+        set(GIT_COMMIT "unknown")
+    endif()
+    
+    string(TIMESTAMP BUILD_DATE "%Y-%m-%d %H:%M:%S")
+    file(WRITE ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/revision.json "{\n  \"commit\": \"${GIT_COMMIT}\",\n  \"version\": \"${MATERIALX_LIBRARY_VERSION}\",\n  \"buildDate\": \"${BUILD_DATE}\"\n}\n")
+    file(WRITE ${PROJECT_BINARY_DIR}/bin/revision.json "{\n  \"commit\": \"${GIT_COMMIT}\",\n  \"version\": \"${MATERIALX_LIBRARY_VERSION}\",\n  \"buildDate\": \"${BUILD_DATE}\"\n}\n")
+    
+    file(WRITE ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/SHA_${GIT_COMMIT} "")
+    file(WRITE ${PROJECT_BINARY_DIR}/bin/SHA_${GIT_COMMIT} "")
+    
+    install(FILES ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/revision.json DESTINATION JavaScript/MaterialX/)
+    install(FILES ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/SHA_${GIT_COMMIT} DESTINATION JavaScript/MaterialX/)
+    
+    set(PATCH_SCRIPT_CONTENT [[
+#!/bin/bash
+INSTALL_DIR="$1"
+if [ -z "$INSTALL_DIR" ]; then
+    echo "Usage: $0 <install-directory>"
+    exit 1
+fi
+
+patch_file() {
+    local file="$1"
+    if [ -f "$file" ]; then
+        echo "Patching $file..."
+        sed -i '' 's/var MaterialX = (() => {/var MaterialX = (function() {/' "$file"
+        sed -i '' 's/function(moduleArg = {}) {/function(MaterialX) {\n  MaterialX = MaterialX || {};/' "$file"
+        if ! grep -q "export default MaterialX;" "$file"; then
+            echo "export default MaterialX;" >> "$file"
+        fi
+    fi
+}
+
+patch_file "$INSTALL_DIR/JsMaterialXCore.js"
+patch_file "$INSTALL_DIR/JsMaterialXGenShader.js"
+echo "Done patching JS files."
+]])
+    
+    file(WRITE ${PROJECT_BINARY_DIR}/patch_js_for_needle.sh "${PATCH_SCRIPT_CONTENT}")
+    file(CHMOD ${PROJECT_BINARY_DIR}/patch_js_for_needle.sh FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    
+    install(CODE "
+        execute_process(COMMAND ${PROJECT_BINARY_DIR}/patch_js_for_needle.sh \${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX)
+    ")
+    
+    message(STATUS "MaterialX JS will be patched for Needle Engine compatibility")
+endif()
