@@ -57,8 +57,8 @@ struct BindingType<std::vector<T>> {
     using ValBinding = BindingType<val>;
     using WireType = ValBinding::WireType;
 
-    static WireType toWireType(const std::vector<T> &vec) {        
-        WireType result = ValBinding::toWireType(val::array(vec));
+    static WireType toWireType(const std::vector<T> &vec, rvp::default_tag = {}) {        
+        WireType result = ValBinding::toWireType(val::array(vec), rvp::default_tag{});
         return result;
     }
 
@@ -74,12 +74,12 @@ struct BindingType<std::vector<bool>> {
     using ValBinding = BindingType<val>;
     using WireType = ValBinding::WireType;
 
-     static WireType toWireType(const std::vector<bool> &vec) {
+     static WireType toWireType(const std::vector<bool> &vec, rvp::default_tag = {}) {
         val out = val::array();
         for (auto i: vec) {
           out.call<void>("push", i == 1 ? true : false);
         }
-        WireType result = ValBinding::toWireType(out);
+        WireType result = ValBinding::toWireType(out, rvp::default_tag{});
         return result;
     }
 
@@ -100,12 +100,12 @@ struct BindingType<std::vector<std::shared_ptr<T>>> {
     using ValBinding = BindingType<val>;
     using WireType = ValBinding::WireType;
 
-    static WireType toWireType(const std::vector<std::shared_ptr<T>> &vec) {
+    static WireType toWireType(const std::vector<std::shared_ptr<T>> &vec, rvp::default_tag = {}) {
         auto arr = val::array();
         for (int i = 0; i < vec.size(); ++i) {
             arr.set(i, vec.at(i));
         }
-        return ValBinding::toWireType(arr);
+        return ValBinding::toWireType(arr, rvp::default_tag{});
     }
 
     static std::vector<std::shared_ptr<T>> fromWireType(WireType value) {
