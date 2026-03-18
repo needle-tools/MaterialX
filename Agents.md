@@ -2,13 +2,19 @@
 
 This file is a practical checklist for future local runs on macOS (and similar Unix shells).
 
+## Human-only actions protocol
+
+If a required step can only be performed by the user (for example: re-enabling Unity MCP, clicking editor UI, granting permissions, or starting an external app), the agent should use the ASK tool to request that action, wait for completion, and then continue execution immediately.
+
+Do not stop with a generic blocker message when ASK can be used.
+
 ## Validated status (2026-03-17)
 
 The commands in this runbook were exercised on this machine.
 
 - Desktop: `MaterialXView` and `MaterialXGraphEditor` run, including `--captureFilename` image output.
 - Python: `PyMaterialX*.so` copy + `mxvalidate.py` run successfully on a repo sample `.mtlx`.
-- WASM: clean build succeeded with emsdk `3.1.47` and `-DMATERIALX_BUILD_USE_CCACHE=OFF`.
+- WASM: clean build succeeded with emsdk `3.1.74` and `-DMATERIALX_BUILD_USE_CCACHE=OFF`. Note: emsdk `3.1.74` no longer works with the current codebase (requires `rvp::default_tag` changes from commit 78757ecc).
 - Web viewer: `npm start` runs after aligning `webpack-cli` to v5 (`npm i -D webpack-cli@^5`).
 
 ## TL;DR
@@ -165,8 +171,8 @@ If `latest` fails for this branch (e.g. embind `toWireType` mismatch), use:
 
 ```bash
 cd /Users/herbst/git/emsdk
-./emsdk install 3.1.47
-./emsdk activate 3.1.47
+./emsdk install 3.1.74
+./emsdk activate 3.1.74
 source /Users/herbst/git/emsdk/emsdk_env.sh
 ```
 
@@ -272,7 +278,7 @@ cd /Users/herbst/git/MaterialX
 rm -rf javascript/build
 
 cd /Users/herbst/git/emsdk
-./emsdk activate 3.1.47
+./emsdk activate 3.1.74
 source /Users/herbst/git/emsdk/emsdk_env.sh
 
 cd /Users/herbst/git/MaterialX
