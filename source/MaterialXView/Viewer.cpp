@@ -244,7 +244,7 @@ Viewer::Viewer(const std::string& materialFilename,
     _meshFilename = localSearchPath.find(_meshFilename);
     _envRadianceFilename = localSearchPath.find(_envRadianceFilename);
 
-    // Set the requested background color.
+    // Set the requested background color (specified in sRGB space).
     set_background(ng::Color(screenColor[0], screenColor[1], screenColor[2], 1.0f));
 
     // Set default Glsl generator options.
