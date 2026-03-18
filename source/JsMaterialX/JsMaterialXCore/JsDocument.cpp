@@ -106,6 +106,14 @@ EMSCRIPTEN_BINDINGS(document)
         .function("hasColorManagementConfig", &mx::Document::hasColorManagementConfig)
         .function("getColorManagementConfig", &mx::Document::getColorManagementConfig)
         .function("invalidateCache", &mx::Document::invalidateCache)
+        .function("validate", ems::optional_override([](mx::Document& self) {
+            std::string message;
+            bool valid = self.validate(&message);
+            ems::val result = ems::val::object();
+            result.set("valid", valid);
+            result.set("message", message);
+            return result;
+        }))
         .class_property("CATEGORY", &mx::Document::CATEGORY)
         .class_property("CMS_ATTRIBUTE", &mx::Document::CMS_ATTRIBUTE)
         .class_property("CMS_CONFIG_ATTRIBUTE", &mx::Document::CMS_CONFIG_ATTRIBUTE);
