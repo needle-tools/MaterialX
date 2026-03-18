@@ -101,5 +101,7 @@ EMSCRIPTEN_BINDINGS(Util)
     BIND_FUNC("isTransparentSurface", mx::isTransparentSurface, 1, 2, mx::ElementPtr, const std::string&);
 
     ems::function("findRenderableElement", &findRenderableElement);
-    BIND_FUNC("getAlphaMode", getAlphaMode, 1, 2, mx::ElementPtr, const std::string&);
+    ems::function("getAlphaMode", ems::optional_override([](mx::ElementPtr element, const std::string& target) {
+        return getAlphaMode(element, target);
+    }));
 }

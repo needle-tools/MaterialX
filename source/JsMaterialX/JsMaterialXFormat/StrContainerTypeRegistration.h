@@ -15,17 +15,27 @@ template<> struct IsStrContainer<mx::FilePath> : std::true_type {};
 
 using StrContainerIntermediate = std::string;
 
-namespace emscripten 
+namespace emscripten
 {
 
-namespace internal 
+namespace internal
 {
 
+// Primary specialization for value types (e.g. FilePath, FileSearchPath).
 template<typename T>
-struct TypeID<T, typename std::enable_if<IsStrContainer<typename std::remove_cv<typename std::remove_reference<T>::type>::type>::value, void>::type> {
+struct TypeID<T, typename std::enable_if<IsStrContainer<typename std::remove_cv<typename std::remove_reference<T>::type>::type>::value && !std::is_reference<T>::value, void>::type> {
   static constexpr TYPEID get() {
     return TypeID<StrContainerIntermediate>::get();
   }
+};
+
+// Explicit specialization for const-ref variants to resolve ambiguity with
+// Emscripten's TypeID<T&> partial specialization (Emscripten 4.x+).
+template<> struct TypeID<const mx::FilePath&> {
+  static constexpr TYPEID get() { return TypeID<StrContainerIntermediate>::get(); }
+};
+template<> struct TypeID<const mx::FileSearchPath&> {
+  static constexpr TYPEID get() { return TypeID<StrContainerIntermediate>::get(); }
 };
 
 template<typename T>
