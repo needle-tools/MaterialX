@@ -407,6 +407,43 @@ bool isTransparentSurface(ElementPtr element, const string& target, vector<Trans
                 }
             }
         }
+
+        // Check inner surface shader nodes for alpha_mode (e.g. custom shader graph wrapping gltf_pbr).
+        // alpha_mode=1 (mask) or alpha_mode=2 (blend) both indicate transparency.
+        if (!found)
+        {
+            for (NodePtr implNode : graph->getNodes())
+            {
+                if (implNode->getType() != SURFACE_SHADER_TYPE_STRING)
+                    continue;
+                InputPtr alphaModeInput = implNode->getActiveInput("alpha_mode");
+                if (!alphaModeInput)
+                    continue;
+                ValuePtr val = alphaModeInput->getValue();
+                int alphaMode = 0;
+                if (val && val->isA<int>())
+                    alphaMode = val->asA<int>();
+                if (alphaMode == 1 || alphaMode == 2)
+                {
+                    // Report the alpha input as the transparency source
+                    InputPtr alphaInput = implNode->getActiveInput("alpha");
+                    if (alphaInput && outInputs)
+                    {
+                        TransparencyInput ti;
+                        ti.name = "alpha";
+                        ti.valueType = alphaInput->getType();
+                        NodePtr connNode = alphaInput->getConnectedNode();
+                        ti.value = connNode ? "[connected:" + connNode->getCategory() + "]"
+                                            : (alphaInput->getValue() ? alphaInput->getValue()->getValueString() : "1");
+                        ti.opaqueAt = 1.0f;
+                        outInputs->push_back(ti);
+                    }
+                    if (!outInputs) return true;
+                    found = true;
+                    break;
+                }
+            }
+        }
     }
 
     return found;
@@ -677,10 +714,13 @@ void getRenderableAnalysis(ConstDocumentPtr doc,
                         if (val && val->isA<int>())
                             innerAlphaMode = val->asA<int>();
                         if (innerAlphaMode == 0)
+                        {
                             info.alphaMode = "opaque";
+                        }
                         else if (innerAlphaMode == 1)
                         {
                             info.alphaMode = "mask";
+                            info.transparency = true;
                             InputPtr innerCutoffInput = implNode->getActiveInput("alpha_cutoff");
                             if (innerCutoffInput)
                             {
@@ -690,7 +730,23 @@ void getRenderableAnalysis(ConstDocumentPtr doc,
                             }
                         }
                         else if (innerAlphaMode == 2)
+                        {
                             info.alphaMode = "blend";
+                            info.transparency = true;
+                            // Report the alpha input as the transparency driver
+                            InputPtr alphaInput = implNode->getActiveInput("alpha");
+                            if (alphaInput)
+                            {
+                                TransparencyInput ti;
+                                ti.name = "alpha";
+                                ti.valueType = alphaInput->getType();
+                                NodePtr connNode = alphaInput->getConnectedNode();
+                                ti.value = connNode ? "[connected:" + connNode->getCategory() + "]"
+                                                    : (alphaInput->getValue() ? alphaInput->getValue()->getValueString() : "1");
+                                ti.opaqueAt = 1.0f;
+                                info.transparencyInputs.push_back(ti);
+                            }
+                        }
                         foundAlphaMode = true;
                         break;
                     }
