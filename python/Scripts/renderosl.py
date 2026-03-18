@@ -53,6 +53,9 @@ SCENE_TEMPLATE = '''\
    </ShaderGroup>
    <Quad corner="-340, -340, -800" edge_x="680, 0, 0" edge_y="0, 680, 0" />
 
+   <!-- Directional light (matches MaterialXView's san_giuseppe light rig) -->
+   {direct_light}
+
    <!-- Material shader graph -->
    <ShaderGroup>
       {param_overrides};
@@ -327,8 +330,9 @@ def main():
                                 min_xyz[i] = min(min_xyz[i], v)
                                 max_xyz[i] = max(max_xyz[i], v)
                 center = [(a + b) / 2 for a, b in zip(min_xyz, max_xyz)]
-                radius = math.sqrt(sum((c - m) ** 2 for c, m in zip(center, min_xyz)))
-                mesh_scale = 2.0 / radius  # IDEAL_MESH_SPHERE_RADIUS / radius
+                import math
+                bbox_radius = math.sqrt(sum((c - m) ** 2 for c, m in zip(center, min_xyz)))
+                mesh_scale = 2.0 / bbox_radius  # IDEAL_MESH_SPHERE_RADIUS / radius
                 cam_dist = 5.0 / mesh_scale
                 # testrender's fov parameter maps to half the screen, so the
                 # effective vertical FOV = 2*atan(tan(fov/2)/2). To match
@@ -344,6 +348,52 @@ def main():
             geometry = '<Sphere center="0, 0, 0" radius="1" />'
             camera_attrs = f'eye="0, 0, 3" dir="0, 0, -1" fov="{opts.fov}"'
 
+        # Set up directional light from the light rig .mtlx file
+        # (MaterialXView loads this automatically from <envmap>.mtlx)
+        direct_light = ''
+        if env_rad:
+            light_rig_path = os.path.splitext(env_rad)[0] + '.mtlx'
+            if os.path.isfile(light_rig_path):
+                import math as _m
+                light_doc = mx.createDocument()
+                mx.readFromXmlFile(light_doc, light_rig_path)
+                for node in light_doc.getNodes():
+                    if node.getCategory() == 'directional_light':
+                        dir_input = node.getInput('direction')
+                        col_input = node.getInput('color')
+                        int_input = node.getInput('intensity')
+                        if dir_input and col_input:
+                            d = [float(x) for x in dir_input.getValueString().split(',')]
+                            c = [float(x) for x in col_input.getValueString().split(',')]
+                            intensity = float(int_input.getValueString()) if int_input else 1.0
+                            # Place an emissive sphere in the light direction.
+                            # A sphere produces a round specular highlight matching
+                            # MaterialXView's point/directional light reflection.
+                            dist = 20.0
+                            light_radius = 1.5
+                            # Normalize direction
+                            mag = _m.sqrt(sum(x*x for x in d))
+                            dn = [-x/mag for x in d]  # toward light
+                            pos = [dn[i] * dist for i in range(3)]
+                            # emitter: radiance = power / (PI * surfacearea)
+                            # surfacearea of sphere = 4 * PI * r^2
+                            # irradiance at scene ≈ radiance * solid_angle
+                            #   ≈ (power / (PI * 4*PI*r^2)) * (PI*r^2 / dist^2)
+                            #   = power / (4 * PI * dist^2)
+                            # Set irradiance = intensity:
+                            #   power = intensity * 4 * PI * dist^2
+                            power = intensity * 4 * _m.pi * dist * dist
+                            direct_light = (
+                                f'<ShaderGroup is_light="yes">\n'
+                                f'      float power {power:.1f};\n'
+                                f'      color Cs {c[0]} {c[1]} {c[2]};\n'
+                                f'      shader emitter layer1;\n'
+                                f'   </ShaderGroup>\n'
+                                f'   <Sphere center="{pos[0]:.1f}, {pos[1]:.1f}, {pos[2]:.1f}" '
+                                f'radius="{light_radius}" />'
+                            )
+                            break
+
         # Generate scene file
         scene_content = SCENE_TEMPLATE.format(
             camera_attrs=camera_attrs,
@@ -355,6 +405,7 @@ def main():
             input_output=input_output,
             output_input=output_input,
             geometry=geometry,
+            direct_light=direct_light,
         )
         scene_file = os.path.join(tmp_dir, 'scene.xml')
         with open(scene_file, 'w') as f:
@@ -365,7 +416,11 @@ def main():
         output_file = os.path.abspath(output_file)
 
         # Run testrender
+        # Include OSL's built-in shader directory (for emitter, matte, etc.)
+        osl_shader_dir = os.path.join(os.path.dirname(testrender_exe), '..', 'share', 'OSL', 'shaders')
         oso_paths = [tmp_dir, utility_oso_dir]
+        if os.path.isdir(osl_shader_dir):
+            oso_paths.append(os.path.abspath(osl_shader_dir))
         print(f'Rendering {opts.width}x{opts.height} @ {opts.rays} rays/pixel...')
         render_testrender(scene_file, output_file, opts.width, opts.height,
                           opts.rays, oso_paths, testrender_exe)
