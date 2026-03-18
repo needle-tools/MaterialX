@@ -656,10 +656,51 @@ void getRenderableAnalysis(ConstDocumentPtr doc,
             }
             else
             {
-                // Generic surface shaders (standard_surface, open_pbr_surface, etc.)
-                // If transparent, classify as "blend" since the HW shader will use
-                // alpha blending with the transparency channel.
-                info.alphaMode = info.transparency ? "blend" : "opaque";
+                // Generic surface shaders (standard_surface, open_pbr_surface, custom graphs, etc.)
+                // Check if the implementation nodegraph contains a surface shader node
+                // with alpha_mode (e.g. a custom shader graph wrapping gltf_pbr).
+                bool foundAlphaMode = false;
+                NodeDefPtr shaderNodeDef = shaderNode->getNodeDef(target);
+                InterfaceElementPtr shaderImpl = shaderNodeDef ? shaderNodeDef->getImplementation(target) : nullptr;
+                if (shaderImpl && shaderImpl->isA<NodeGraph>())
+                {
+                    NodeGraphPtr implGraph = shaderImpl->asA<NodeGraph>();
+                    for (NodePtr implNode : implGraph->getNodes())
+                    {
+                        if (implNode->getType() != SURFACE_SHADER_TYPE_STRING)
+                            continue;
+                        InputPtr innerAlphaModeInput = implNode->getActiveInput("alpha_mode");
+                        if (!innerAlphaModeInput)
+                            continue;
+                        ValuePtr val = innerAlphaModeInput->getValue();
+                        int innerAlphaMode = 0;
+                        if (val && val->isA<int>())
+                            innerAlphaMode = val->asA<int>();
+                        if (innerAlphaMode == 0)
+                            info.alphaMode = "opaque";
+                        else if (innerAlphaMode == 1)
+                        {
+                            info.alphaMode = "mask";
+                            InputPtr innerCutoffInput = implNode->getActiveInput("alpha_cutoff");
+                            if (innerCutoffInput)
+                            {
+                                ValuePtr cutoffVal = innerCutoffInput->getValue();
+                                if (cutoffVal && cutoffVal->isA<float>())
+                                    info.alphaCutoff = cutoffVal->asA<float>();
+                            }
+                        }
+                        else if (innerAlphaMode == 2)
+                            info.alphaMode = "blend";
+                        foundAlphaMode = true;
+                        break;
+                    }
+                }
+                if (!foundAlphaMode)
+                {
+                    // Fallback: if transparent, classify as "blend" since the HW shader
+                    // will use alpha blending with the transparency channel.
+                    info.alphaMode = info.transparency ? "blend" : "opaque";
+                }
             }
         }
 
