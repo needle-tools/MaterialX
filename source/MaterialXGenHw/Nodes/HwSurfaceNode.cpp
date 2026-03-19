@@ -119,7 +119,25 @@ void HwSurfaceNode::emitFunctionCall(const ShaderNode& node, GenContext& context
 
         shadergen.emitScopeBegin(stage);
 
-        shadergen.emitLine(vec3+" N = normalize(" + prefix + HW::T_NORMAL_WORLD + ")", stage);
+        bool hasDisplacement = false;
+        for (size_t vi = 0; vi < vertexData.size(); ++vi)
+        {
+            if (vertexData[vi]->getType() == Type::DISPLACEMENTSHADER)
+            {
+                hasDisplacement = true;
+                break;
+            }
+        }
+        if (hasDisplacement)
+        {
+            shadergen.emitComment("Recompute normal from displaced surface using screen-space derivatives", stage);
+            shadergen.emitLine(vec3+" N = normalize(cross(dFdx(" + prefix + HW::T_POSITION_WORLD + "), "
+                               "dFdy(" + prefix + HW::T_POSITION_WORLD + ")))", stage);
+        }
+        else
+        {
+            shadergen.emitLine(vec3+" N = normalize(" + prefix + HW::T_NORMAL_WORLD + ")", stage);
+        }
         shadergen.emitLine(vec3+" V = normalize(" + HW::T_VIEW_POSITION + " - " + prefix + HW::T_POSITION_WORLD + ")", stage);
         shadergen.emitLine(vec3+" P = " + prefix + HW::T_POSITION_WORLD, stage);
         shadergen.emitLine(vec3+" L = "+vec3_zero, stage);

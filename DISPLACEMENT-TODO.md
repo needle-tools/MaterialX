@@ -49,6 +49,9 @@ Vertex displacement is now working end-to-end for the GLSL backend in MaterialXV
 - [x] **MaterialXView** renders displacement correctly
 - [x] **MaterialXGraphEditor** renders displacement correctly (shares GlslShaderGenerator)
 - [x] **Procedural noise** displacement tested (fractal3d, dotproduct)
+- [x] **Normal recomputation** via dFdx/dFdy of displaced world position in pixel stage
+- [x] **HwTexCoordNode** emits output variable in vertex stage for texture displacement deps
+- [x] **Token substitution** ($fileTransformUv) set before vertex stage emission
 
 ---
 
@@ -56,26 +59,10 @@ Vertex displacement is now working end-to-end for the GLSL backend in MaterialXV
 
 ### P0 — Must Fix
 
-#### Normal Recomputation After Displacement
-**Problem:** Vertex normals are passed through unchanged. Displaced surfaces look smooth instead of bumpy because the pixel shader uses the original smooth normals.
+#### Normal Recomputation After Displacement — DONE
+**Implemented:** Using `dFdx`/`dFdy` in the pixel stage on the displaced world position. Gives correct per-fragment geometric normals with faceted appearance. Detected by checking for `displacementshader` type in vertex data block.
 
-**Plan:**
-1. After computing `displacedPosition`, compute displaced normals using finite differences:
-   ```glsl
-   // Compute tangent-space displacement derivatives
-   float eps = 0.001;
-   vec3 posX = i_position + i_tangent * eps;
-   vec3 posY = i_position + cross(i_normal, i_tangent) * eps;
-   // Evaluate displacement at offset positions
-   float dX = displaceFunc(posX) - displaceFunc(i_position);
-   float dY = displaceFunc(posY) - displaceFunc(i_position);
-   // Perturb normal
-   vec3 displacedNormal = normalize(i_normal - (dX * i_tangent + dY * bitangent) / eps);
-   ```
-2. **Alternative (simpler):** Use `dFdx`/`dFdy` in the PIXEL stage on the displaced world position to derive the geometric normal. This avoids vertex shader complexity but gives faceted normals.
-3. **Alternative (cheapest):** Skip normal recomputation for now and document it. Many engines do displacement without normal correction for low-frequency displacement.
-
-**Files to modify:** `GlslShaderGenerator.cpp` (vertex stage emission), `SurfaceNodeGlsl.cpp` (pass displaced normal to pixel stage)
+**Future improvement:** Smooth displaced normals via vertex shader finite differences or tangent-space perturbation (would give smoother results than dFdx/dFdy which is faceted).
 
 #### Texture-Based Displacement
 **Problem:** Texture sampling (`image` node) in the vertex shader produces blank output. No shader compile error, but the texture may not be bound for the vertex stage, or `texture()` needs explicit LOD (`textureLod(tex, uv, 0.0)`) in vertex shaders on some platforms.
