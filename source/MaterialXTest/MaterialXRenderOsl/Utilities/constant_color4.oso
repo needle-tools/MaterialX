@@ -1,0 +1,29 @@
+OpenShadingLanguage 1.00
+# Compiled by oslc 1.16.0.0dev
+# options: -I -I -I -o /Users/herbst/git/MaterialX/source/MaterialXTest/MaterialXRenderOsl/Utilities/constant_color4.oso
+surface constant_color4	%meta{string,description,"Simple closure for constant color surface rendering"} 
+param	struct color4	Cin			%meta{string,description,"Input color to modulate emission with"}  %read{2147483647,-1} %write{2147483647,-1} %struct{"color4"} %structfields{rgb,a} %structfieldtypes{"cf"} %structnfields{2}
+param	color	Cin.rgb	0 0 0		%meta{string,description,"Input color to modulate emission with"}  %read{1,3} %write{2147483647,-1} %mystruct{Cin} %mystructfield{0}
+param	float	Cin.a	0		%meta{string,description,"Input color to modulate emission with"}  %read{5,5} %write{2147483647,-1} %mystruct{Cin} %mystructfield{1}
+global	closure color	Ci	%read{2147483647,-1} %write{6,6}
+temp	closure color	$tmp1	%read{6,6} %write{0,0}
+const	string	$const1	"emission"		%read{0,0} %write{2147483647,-1}
+temp	color	$tmp2	%read{5,5} %write{4,4}
+const	int	$const2	0		%read{1,1} %write{2147483647,-1}
+temp	float	$tmp3	%read{4,4} %write{1,1}
+const	int	$const3	1		%read{2,2} %write{2147483647,-1}
+temp	float	$tmp4	%read{4,4} %write{2,2}
+const	int	$const4	2		%read{3,3} %write{2147483647,-1}
+temp	float	$tmp5	%read{4,4} %write{3,3}
+temp	color	$tmp6	%read{6,6} %write{5,5}
+code ___main___
+# source/MaterialXTest/MaterialXRenderOsl/Utilities/constant_color4.osl:12
+# }
+	closure		$tmp1 $const1 	%filename{"source/MaterialXTest/MaterialXRenderOsl/Utilities/constant_color4.osl"} %line{12} %argrw{"wr"}
+	compref		$tmp3 Cin.rgb $const2 	%argrw{"wrr"}
+	compref		$tmp4 Cin.rgb $const3 	%argrw{"wrr"}
+	compref		$tmp5 Cin.rgb $const4 	%argrw{"wrr"}
+	color		$tmp2 $tmp3 $tmp4 $tmp5 	%argrw{"wrrr"}
+	mul		$tmp6 $tmp2 Cin.a 	%argrw{"wrr"}
+	mul		Ci $tmp1 $tmp6 	%argrw{"wrr"}
+	end
