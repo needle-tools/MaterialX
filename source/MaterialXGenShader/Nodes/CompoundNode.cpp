@@ -183,20 +183,72 @@ void CompoundNode::emitFunctionCall(const ShaderNode& node, GenContext& context,
             };
             for (ShaderGraphOutputSocket* outputSocket : _rootGraph->getOutputSockets())
             {
-                // Only follow non-closure, non-shader outputs (e.g. vector3 displacement offset)
-                if (!outputSocket->getType().isClosure() &&
-                    outputSocket->getType().getSemantic() != TypeDesc::SEMANTIC_SHADER)
+                // Follow displacement-related outputs: displacementshader type,
+                // or non-closure/non-shader outputs (e.g. vector3 offset).
+                // Skip surfaceshader/volumeshader/lightshader outputs.
+                const TypeDesc& outType = outputSocket->getType();
+                if (outType == Type::DISPLACEMENTSHADER ||
+                    (!outType.isClosure() && outType.getSemantic() != TypeDesc::SEMANTIC_SHADER))
                 {
                     if (outputSocket->getConnection())
                         collectUpstream(outputSocket->getConnection()->getNode());
                 }
             }
+            // Bind interface parameters as local variables.
+            // Internal nodes reference function parameters (e.g. "in1" for _Strength)
+            // but we're emitting directly into main(), not inside the compound function.
+            // Declare locals initialized from the compound node's actual input values.
+            for (ShaderInput* nodeInput : node.getInputs())
+            {
+                for (ShaderGraphInputSocket* socket : _rootGraph->getInputSockets())
+                {
+                    if (socket->getName() == nodeInput->getName())
+                    {
+                        const string& paramVar = socket->getVariable();
+                        shadergen.emitLineBegin(stage);
+                        shadergen.emitString(shadergen.getSyntax().getTypeName(socket->getType()) + " " + paramVar + " = ", stage);
+                        shadergen.emitInput(nodeInput, context, stage);
+                        shadergen.emitLineEnd(stage);
+                        break;
+                    }
+                }
+            }
+
             // Emit only the relevant nodes in topological order
             for (const ShaderNode* internalNode : _rootGraph->getNodes())
             {
                 if (relevantNodes.count(internalNode))
                 {
                     shadergen.emitFunctionCall(*internalNode, context, stage);
+                }
+            }
+
+            // Declare and assign the compound node's displacement output variables
+            // so the calling code (emitVertexStage) can reference them.
+            for (size_t i = 0; i < node.numOutputs(); ++i)
+            {
+                const ShaderOutput* nodeOutput = node.getOutput(i);
+                const TypeDesc& outType = nodeOutput->getType();
+                if (outType == Type::DISPLACEMENTSHADER ||
+                    (!outType.isClosure() && outType.getSemantic() != TypeDesc::SEMANTIC_SHADER))
+                {
+                    // Find the matching internal output socket
+                    for (ShaderGraphOutputSocket* outputSocket : _rootGraph->getOutputSockets())
+                    {
+                        if (outputSocket->getName() == nodeOutput->getName() ||
+                            (i < _rootGraph->numOutputSockets() && _rootGraph->getOutputSocket(i) == outputSocket))
+                        {
+                            if (outputSocket->getConnection())
+                            {
+                                const string result = shadergen.getUpstreamResult(outputSocket, context);
+                                shadergen.emitLineBegin(stage);
+                                shadergen.emitOutput(nodeOutput, true, false, context, stage);
+                                shadergen.emitString(" = " + result, stage);
+                                shadergen.emitLineEnd(stage);
+                            }
+                            break;
+                        }
+                    }
                 }
             }
         }

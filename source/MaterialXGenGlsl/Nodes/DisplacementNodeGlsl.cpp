@@ -32,6 +32,12 @@ void DisplacementNodeGlsl::emitFunctionCall(const ShaderNode& node, GenContext& 
 
     DEFINE_SHADER_STAGE(stage, Stage::VERTEX)
     {
+        // Only emit displacement in vertex stage when actively evaluating
+        // displacement dependencies. Default displacement nodes from
+        // surfacematerial's unconnected inputs should be skipped.
+        if (!context.getEmitVertexDisplacement())
+            return;
+
         // Emit all dependent nodes first (fractal3d, position, multiply, etc.)
         // so their outputs are available for the displacement calculation.
         shadergen.emitDependentFunctionCalls(node, context, stage);
@@ -94,9 +100,14 @@ void DisplacementNodeGlsl::emitFunctionCall(const ShaderNode& node, GenContext& 
 
     DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
     {
-        // No displacement data is passed to the pixel stage.
-        // Normal recomputation uses dFdx/dFdy of the displaced world position
-        // and is triggered by detecting the displacement marker in vertex data.
+        // Displacement is applied in the vertex stage, but the pixel stage
+        // still needs the output variable declared for compound function
+        // definitions that reference all outputs.
+        const ShaderOutput* output = node.getOutput();
+        shadergen.emitLineBegin(stage);
+        shadergen.emitOutput(output, true, false, context, stage);
+        shadergen.emitString(" = displacementshader(vec3(0.0), 1.0)", stage);
+        shadergen.emitLineEnd(stage);
     }
 }
 

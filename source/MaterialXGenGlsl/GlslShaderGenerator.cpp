@@ -211,13 +211,35 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
     // Check for displacement nodes and collect dependency chain early —
     // needed for uniform filtering and function definitions.
     const ShaderNode* displacementNode = nullptr;
+    const ShaderOutput* displacementOutput = nullptr;  // specific output for multioutput nodes
     std::set<const ShaderNode*> dispDeps;
     for (const ShaderNode* node : graph.getNodes())
     {
         if (node->getOutput()->getType() == Type::DISPLACEMENTSHADER)
         {
-            displacementNode = node;
-            break;
+            // Skip default displacement nodes from surfacematerial's unconnected
+            // inputs. Check that the displacement input connects to a real
+            // computation node, not just a graph input socket.
+            bool isDefault = true;
+            const ShaderInput* dispIn = node->getInput("displacement");
+            if (dispIn && dispIn->getConnection())
+            {
+                const ShaderNode* upstream = dispIn->getConnection()->getNode();
+                // Real nodes have inputs with connections; graph input socket nodes don't
+                if (upstream)
+                {
+                    for (ShaderInput* upIn : upstream->getInputs())
+                    {
+                        if (upIn->getConnection()) { isDefault = false; break; }
+                    }
+                }
+            }
+            if (!isDefault)
+            {
+                displacementNode = node;
+                displacementOutput = node->getOutput();
+                break;
+            }
         }
         // Also check MaterialNode's displacementshader input — the displacement
         // may be connected through a nodedef compound node rather than being
@@ -227,8 +249,51 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
             const ShaderInput* dispInput = node->getInput(ShaderNode::DISPLACEMENTSHADER);
             if (dispInput && dispInput->getConnection())
             {
-                displacementNode = dispInput->getConnection()->getNode();
-                break;
+                const ShaderNode* candidate = dispInput->getConnection()->getNode();
+                // Skip self-connections and graph-node connections
+                // (default unconnected displacement loops back via graph input sockets)
+                if (!candidate || candidate == node || candidate == &graph) continue;
+                if (candidate)
+                {
+                    // Check that the displacement node has real upstream computation.
+                    // Default displacement nodes (from unconnected surfacematerial inputs)
+                    // only connect to the graph's own input sockets.
+                    bool hasRealInput = false;
+
+                    // For compound/multioutput nodes (nodedef instances), displacement
+                    // is inside the compound graph — just check if the node has
+                    // a displacement output, which means it was authored.
+                    if (candidate->numOutputs() > 1)
+                    {
+                        // Compound node: check if it has a displacement-related output
+                        for (size_t oi = 0; oi < candidate->numOutputs(); ++oi)
+                        {
+                            if (candidate->getOutput(oi)->getType() == Type::DISPLACEMENTSHADER)
+                            {
+                                hasRealInput = true;
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Default displacement nodes auto-created by the graph
+                        // builder have names starting with their type name
+                        // (e.g. "displacementshader1"). Authored nodes have
+                        // user-defined names (e.g. "disp1", "needle_displacement").
+                        const string& name = candidate->getName();
+                        if (name.find("displacementshader") != 0)
+                        {
+                            hasRealInput = true;
+                        }
+                    }
+                    if (hasRealInput)
+                    {
+                        displacementOutput = dispInput->getConnection();
+                        displacementNode = candidate;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -328,7 +393,8 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
         // Apply displacement along the vertex normal.
         // Float displacement stores the value in offset.z (via vec3(0,0,disp)).
         // Vector3 displacement uses the full offset directly.
-        const string& dispVar = displacementNode->getOutput()->getVariable();
+        // Use the specific displacement output (important for multioutput compound nodes).
+        const string& dispVar = displacementOutput->getVariable();
         emitComment("Apply vertex displacement along normal", stage);
         // Use the magnitude of the offset for normal-direction displacement.
         // For float displacement: offset = (0,0,d) → length = |d|, sign from d.
@@ -348,12 +414,18 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
         emitLine("gl_Position = " + HW::T_VIEW_PROJECTION_MATRIX + " * hPositionWorld", stage);
 
         // Emit remaining nodes for vertex data connectors.
-        // Non-displacement nodes with PIXEL stage guards will skip.
-        // SurfaceNodeGlsl has explicit vertex stage handling for
-        // position/normal data passing.
+        // Displacement dep nodes were already emitted above. For compound
+        // nodes that are in dispDeps, force re-emit their vertex data
+        // connectors (normalWorld, positionWorld, etc.) since their first
+        // emission only handled displacement-related internal nodes.
         for (const ShaderNode* node : graph.getNodes())
         {
-            if (!dispDeps.count(node))
+            if (dispDeps.count(node))
+            {
+                // Force vertex data emission for compound nodes
+                node->getImplementation().emitFunctionCall(*node, context, stage);
+            }
+            else
             {
                 emitFunctionCall(*node, context, stage);
             }
