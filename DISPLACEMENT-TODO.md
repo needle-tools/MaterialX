@@ -2,7 +2,7 @@
 
 ## Overview
 
-Vertex displacement is now working end-to-end for the GLSL backend in MaterialXView and MaterialXGraphEditor. Displacement nodes in the shader graph evaluate their dependency chain (noise, position, math, etc.) in the vertex shader and offset vertex positions before transformation.
+Vertex displacement is working end-to-end for GLSL and ESSL backends. Displacement nodes in the shader graph evaluate their dependency chain (noise, position, math, texture) in the vertex shader and offset vertex positions before transformation. Both procedural (fractal3d) and texture-based (image node) displacement are supported.
 
 ## Key Files
 
@@ -10,12 +10,13 @@ Vertex displacement is now working end-to-end for the GLSL backend in MaterialXV
 | File | Purpose |
 |------|---------|
 | `source/MaterialXGenGlsl/GlslShaderGenerator.cpp` | Main vertex stage emission with displacement detection, dependency chain evaluation, and position offset |
-| `source/MaterialXGenGlsl/Nodes/DisplacementNodeGlsl.h/cpp` | GLSL-specific displacement node implementation (struct construction, vertex data connector) |
+| `source/MaterialXGenGlsl/Nodes/DisplacementNodeGlsl.h/cpp` | GLSL/ESSL displacement node implementation (struct construction, float marker varying) |
+| `source/MaterialXGenGlsl/Nodes/SurfaceNodeGlsl.cpp` | Normal recomputation via dFdx/dFdy when displacement marker is detected |
 | `source/MaterialXGenShader/Nodes/SourceCodeNode.cpp` | Modified to allow vertex-stage emission when displacement flag is set |
-| `source/MaterialXGenShader/Nodes/HwPositionNode.cpp` | Modified to emit output variable in vertex stage for displacement dependencies |
-| `source/MaterialXGenShader/Nodes/MaterialNode.cpp` | Propagates displacement classification |
-| `source/MaterialXGenShader/GenContext.h` | Added `emitVertexDisplacement` flag |
-| `source/MaterialXGenShader/ShaderNode.h/cpp` | Added `DISPLACEMENTSHADER` constant |
+| `source/MaterialXGenShader/Nodes/HwPositionNode.cpp` | Emits output variable in vertex stage for displacement dependencies |
+| `source/MaterialXGenShader/Nodes/HwTexCoordNode.cpp` | Emits output variable in vertex stage for texture displacement deps |
+| `source/MaterialXGenShader/GenContext.h` | `emitVertexDisplacement` flag |
+| `source/MaterialXGenShader/HwShaderGenerator.h/cpp` | `T_DISPLACEMENT_ACTIVE` constant for vertex data marker |
 
 ### Library Files
 | File | Purpose |
@@ -23,20 +24,20 @@ Vertex displacement is now working end-to-end for the GLSL backend in MaterialXV
 | `libraries/pbrlib/pbrlib_defs.mtlx` | Node definitions: `ND_displacement_float`, `ND_displacement_vector3` |
 | `libraries/pbrlib/genglsl/mx_displacement_float.glsl` | Float → vec3(d,d,d) conversion |
 | `libraries/pbrlib/genglsl/mx_displacement_vector3.glsl` | Direct vec3 pass-through |
-| `libraries/pbrlib/genglsl/pbrlib_genglsl_impl.mtlx` | Implementation mappings |
 
 ### Test Materials
 | File | Description |
 |------|-------------|
 | `resources/Materials/TestSuite/pbrlib/displacement/displacement.mtlx` | Standalone displacement graphs (fractal3d float & vector3) |
-| `resources/Materials/TestSuite/pbrlib/displacement/displaced_material.mtlx` | Surface + displacement combined (amplitude=10, too high for shaderball) |
+| `resources/Materials/TestSuite/pbrlib/displacement/displaced_material.mtlx` | Surface + displacement combined (amplitude=10, extreme) |
+| `resources/Materials/TestSuite/pbrlib/displacement/texture_displacement.mtlx` | Texture-based displacement (image node sampling) |
 
 ---
 
 ## Done
 
 - [x] **Displacement node detection** in shader graph (`Type::DISPLACEMENTSHADER`)
-- [x] **DisplacementNodeGlsl** implementation — constructs `displacementshader` struct in vertex stage, passes via vertex data connector
+- [x] **DisplacementNodeGlsl** implementation — constructs `displacementshader` struct in vertex stage
 - [x] **Dependency chain evaluation** — recursively collects upstream nodes, emits in topological order in vertex stage
 - [x] **Context flag** (`emitVertexDisplacement`) gates vertex-stage emission in `SourceCodeNode`
 - [x] **Function definitions** emitted for both stages when displacement is active
@@ -52,6 +53,9 @@ Vertex displacement is now working end-to-end for the GLSL backend in MaterialXV
 - [x] **Normal recomputation** via dFdx/dFdy of displaced world position in pixel stage
 - [x] **HwTexCoordNode** emits output variable in vertex stage for texture displacement deps
 - [x] **Token substitution** ($fileTransformUv) set before vertex stage emission
+- [x] **Texture-based displacement** — sampler2D uniforms emitted without file path initializers, string-type inputs (enums) mapped to int correctly
+- [x] **ESSL (WebGL 2) support** — float marker varying instead of struct (ESSL 300 doesn't support struct varyings), no uniform initializers
+- [x] **Displacement detection** via `displacementActive` float marker in vertex data (compatible with both GLSL interface blocks and ESSL flat varyings)
 
 ---
 
@@ -60,20 +64,14 @@ Vertex displacement is now working end-to-end for the GLSL backend in MaterialXV
 ### P0 — Must Fix
 
 #### Normal Recomputation After Displacement — DONE
-**Implemented:** Using `dFdx`/`dFdy` in the pixel stage on the displaced world position. Gives correct per-fragment geometric normals with faceted appearance. Detected by checking for `displacementshader` type in vertex data block.
+**Implemented:** Using `dFdx`/`dFdy` in the pixel stage on the displaced world position. Gives correct per-fragment geometric normals with faceted appearance. Detected by checking for `displacementActive` marker in vertex data block.
 
 **Future improvement:** Smooth displaced normals via vertex shader finite differences or tangent-space perturbation (would give smoother results than dFdx/dFdy which is faceted).
 
-#### Texture-Based Displacement
-**Problem:** Texture sampling (`image` node) in the vertex shader produces blank output. No shader compile error, but the texture may not be bound for the vertex stage, or `texture()` needs explicit LOD (`textureLod(tex, uv, 0.0)`) in vertex shaders on some platforms.
-
-**Plan:**
-1. Check if `HwImageNode` (which is a `SourceCodeNode`) emits correct GLSL for vertex stage — `texture()` should work in GLSL 4.0+ vertex shaders
-2. Investigate if the blank output is from the texture uniform not being bound in the vertex stage
-3. If `textureLod` is needed, add a vertex-stage variant of the image sampling function
-4. Test with explicit LOD override
-
-**Files to modify:** `HwImageNode.cpp` or the image sampling GLSL library functions
+#### Texture-Based Displacement — DONE
+**Fixed:** Two bugs in vertex stage uniform emission:
+1. sampler2D uniforms were emitted with file path initializers (`uniform sampler2D tex = path/file.png;`) — the `/` caused GLSL syntax errors
+2. String-typed uniforms (layer, framerange enums) were incorrectly skipped — GLSL maps these to `int` via `GlslStringTypeSyntax`
 
 ### P1 — Other Backends
 
@@ -87,15 +85,11 @@ Vertex displacement is now working end-to-end for the GLSL backend in MaterialXV
 **Files to create:** `source/MaterialXGenMsl/Nodes/DisplacementNodeMsl.h/cpp`
 **Files to modify:** `source/MaterialXGenMsl/MslShaderGenerator.cpp`
 
-#### ESSL (WebGL) Backend
-**Plan:** ESSL inherits from GLSL. The `EsslShaderGenerator` extends `GlslShaderGenerator`. Displacement should mostly work if:
-1. ESSL version supports vertex texture fetch (ESSL 3.0+ / WebGL 2)
-2. `displacementshader` struct is supported (should be)
-3. The function definitions emitted in vertex stage are ESSL-compatible
-
-**Risk:** `fractal3d` and other procedural noise functions may not be available in ESSL vertex shaders on all devices. Test on WebGL 2 target.
-
-**Files to modify:** `source/MaterialXGenGlsl/EsslShaderGenerator.cpp` (if vertex stage override exists)
+#### ESSL (WebGL) Backend — DONE
+**Implemented:** ESSL inherits from GLSL. Three ESSL-specific fixes applied:
+1. Float marker varying (`displacementActive`) instead of struct (ESSL 300 doesn't support struct varyings)
+2. Uniform declarations without initializers (ESSL 300 doesn't support `uniform int x = 0;`)
+3. Correct varying assignment (no local variable shadowing)
 
 #### WebGPU (WGSL) Backend
 **Plan:** The WGSL backend (`source/MaterialXGenWgsl/`) would need:
@@ -154,21 +148,26 @@ Shader Generation:
   1. GlslShaderGenerator::emitVertexStage() detects displacement node
   2. Collects dependency set (recursive upstream walk)
   3. Sets context.emitVertexDisplacement = true
-  4. Emits public uniforms directly as GLSL declarations
+  4. Emits public uniforms directly as GLSL declarations (skipping initializers for ESSL)
   5. Emits function definitions (SourceCodeNode checks flag)
   6. In main(): emits dependency chain function calls
   7. Emits displacement struct construction
-  8. Applies: displacedPosition = position + normal * offset.z * scale
-  9. Transforms: gl_Position = viewProj * world * displacedPosition
-  10. Emits surface shader vertex data connectors (position/normal)
-  11. Clears displacement flag
+  8. Sets displacementActive = 1.0 marker varying
+  9. Applies: displacedPosition = position + normal * offset.z * scale
+  10. Transforms: gl_Position = viewProj * world * displacedPosition
+  11. Emits surface shader vertex data connectors (position/normal)
+  12. Clears displacement flag
+
+Normal Recomputation (pixel stage):
+  1. SurfaceNodeGlsl checks vertex data for displacementActive marker
+  2. If found: N = normalize(cross(dFdx(positionWorld), dFdy(positionWorld)))
+  3. If not: N = normalize(normalWorld)
 ```
 
-### Key Design Decision: Context Flag vs Stage Override
+### Key Design Decisions
 
-The `emitVertexDisplacement` flag on `GenContext` was chosen over:
-- **Modifying `DEFINE_SHADER_STAGE` macro** — too broad, would affect all nodes
-- **Stage name override** — fragile, would confuse other stage-specific logic
-- **Separate vertex emission pass** — would require duplicating all node emission logic
+**Context Flag (`emitVertexDisplacement`):** Only `SourceCodeNode::emitFunctionCall` and `SourceCodeNode::emitFunctionDefinition` check it, allowing vertex-stage emission for displacement dependency nodes while keeping all other nodes pixel-only.
 
-The flag approach is surgical: only `SourceCodeNode::emitFunctionCall` and `SourceCodeNode::emitFunctionDefinition` check it, allowing vertex-stage emission for displacement dependency nodes while keeping all other nodes pixel-only.
+**Float Marker Varying:** The `displacementActive` float varying was chosen over passing the full `displacementshader` struct because ESSL 300 (WebGL 2) does not support struct varyings. The float marker is compatible with both GLSL interface blocks and ESSL flat varyings, and the pixel stage only needs to know displacement is active (not the actual values).
+
+**Direct Uniform Emission:** Public uniforms for displacement are emitted as direct `uniform` declarations in the generated GLSL, bypassing the uniform block system. This avoids a MaterialXView bug where `GlslProgram::updateUniformsList()` corrupts uniform bindings when the same name appears in both vertex and pixel stage uniform blocks.
