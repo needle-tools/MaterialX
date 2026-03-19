@@ -208,8 +208,10 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
     emitLibraryInclude("stdlib/genglsl/lib/mx_math.glsl", context, stage);
     emitLineBreak(stage);
 
-    // Check for displacement nodes early — needed for function definitions.
+    // Check for displacement nodes and collect dependency chain early —
+    // needed for uniform filtering and function definitions.
     const ShaderNode* displacementNode = nullptr;
+    std::set<const ShaderNode*> dispDeps;
     for (const ShaderNode* node : graph.getNodes())
     {
         if (node->getOutput()->getType() == Type::DISPLACEMENTSHADER)
@@ -218,35 +220,60 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
             break;
         }
     }
-
     if (displacementNode)
     {
-        // Emit displacement-dependency uniforms in the vertex shader.
-        // These correspond to graph input sockets that become PUBLIC_UNIFORMS
-        // in the pixel stage. We emit them directly as uniform declarations
-        // rather than adding to the vertex stage's uniform block system.
-        emitComment("Public uniforms (shared with pixel stage for displacement)", stage);
+        std::function<void(const ShaderNode*)> collectDeps = [&](const ShaderNode* n) {
+            if (dispDeps.count(n)) return;
+            dispDeps.insert(n);
+            for (ShaderInput* input : n->getInputs())
+            {
+                const ShaderNode* upstream = input->getConnectedSibling();
+                if (upstream) collectDeps(upstream);
+            }
+        };
+        collectDeps(displacementNode);
+
+        // Emit public uniforms in the vertex shader so displacement
+        // dependencies can access them. We emit all editable graph input
+        // sockets as direct uniform declarations rather than adding to the
+        // vertex stage's uniform block, because the uniform block approach
+        // causes binding conflicts in GlslProgram::updateUniformsList().
+        // Shared GLSL uniforms between vertex and pixel stages are fine —
+        // they reference the same uniform location.
+        emitComment("Public uniforms (shared with pixel stage)", stage);
         for (ShaderGraphInputSocket* inputSocket : graph.getInputSockets())
         {
-            if (!inputSocket->getConnections().empty() && graph.isEditable(*inputSocket))
+            if (inputSocket->getConnections().empty() || !graph.isEditable(*inputSocket))
+                continue;
+
+            const TypeDesc& type = inputSocket->getType();
+
+            // Skip types that can't be GLSL uniforms
+            if (type.isClosure() || type.isStruct())
+                continue;
+
+            const string& qualifier = _syntax->getUniformQualifier();
+            const string typeName = _syntax->getTypeName(type);
+
+            // Texture/filename types become sampler2D uniforms — emit
+            // without an initializer since their "value" is a file path.
+            if (type.getSemantic() == TypeDesc::SEMANTIC_FILENAME)
             {
-                // Skip non-scalar/vector types that can't be uniforms
-                if (inputSocket->getType().isClosure() || inputSocket->getType().isStruct())
-                    continue;
-                const string& qualifier = _syntax->getUniformQualifier();
-                const string typeName = _syntax->getTypeName(inputSocket->getType());
-                string valueStr;
-                if (inputSocket->getValue())
-                {
-                    valueStr = _syntax->getValue(inputSocket->getType(), *inputSocket->getValue());
-                }
-                else
-                {
-                    valueStr = _syntax->getDefaultValue(inputSocket->getType());
-                }
-                emitLine(qualifier + " " + typeName + " " + inputSocket->getVariable() +
-                         (valueStr.empty() ? "" : " = " + valueStr), stage);
+                emitLine(qualifier + " " + typeName + " " + inputSocket->getVariable(), stage);
+                continue;
             }
+
+            string valueStr;
+            if (inputSocket->getValue())
+            {
+                valueStr = _syntax->getValue(type, *inputSocket->getValue());
+            }
+            else
+            {
+                valueStr = _syntax->getDefaultValue(type);
+            }
+            emitLine(qualifier + " " + typeName + " " + inputSocket->getVariable() +
+                     (valueStr.empty() ? "" : " = " + valueStr), stage);
         }
         emitLineBreak(stage);
 
@@ -262,19 +289,6 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
 
     if (displacementNode)
     {
-        // Build the set of nodes upstream of the displacement node.
-        std::set<const ShaderNode*> dispDeps;
-        std::function<void(const ShaderNode*)> collectDeps = [&](const ShaderNode* n) {
-            if (dispDeps.count(n)) return;
-            dispDeps.insert(n);
-            for (ShaderInput* input : n->getInputs())
-            {
-                const ShaderNode* upstream = input->getConnectedSibling();
-                if (upstream) collectDeps(upstream);
-            }
-        };
-        collectDeps(displacementNode);
-
         // Enable vertex displacement flag so SourceCodeNode allows
         // emission in the vertex stage for displacement dependencies.
         context.setEmitVertexDisplacement(true);
