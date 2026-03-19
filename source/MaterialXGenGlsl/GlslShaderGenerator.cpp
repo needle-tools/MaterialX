@@ -144,6 +144,17 @@ ShaderPtr GlslShaderGenerator::generate(const string& name, ElementPtr element, 
         resourceBindingCtx->initialize();
     }
 
+    // Set the include file for uv transformations early, before the vertex
+    // stage, so displacement nodes using texture sampling can resolve it.
+    if (context.getOptions().fileTextureVerticalFlip)
+    {
+        _tokenSubstitutions[ShaderGenerator::T_FILE_TRANSFORM_UV] = "mx_transform_uv_vflip.glsl";
+    }
+    else
+    {
+        _tokenSubstitutions[ShaderGenerator::T_FILE_TRANSFORM_UV] = "mx_transform_uv.glsl";
+    }
+
     // Emit code for vertex shader stage
     ShaderStage& vs = shader->getStage(Stage::VERTEX);
     emitVertexStage(shader->getGraph(), context, vs);
