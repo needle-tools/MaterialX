@@ -69,6 +69,13 @@ void HwNormalNode::emitFunctionCall(const ShaderNode& node, GenContext& context,
                 shadergen.emitLine(prefix + normal->getVariable() + " = " + HW::T_IN_NORMAL, stage);
             }
         }
+
+        // Declare the output variable so displacement dependencies can use it.
+        const ShaderOutput* output = node.getOutput();
+        shadergen.emitLineBegin(stage);
+        shadergen.emitOutput(output, true, false, context, stage);
+        shadergen.emitString(" = " + HW::T_IN_NORMAL, stage);
+        shadergen.emitLineEnd(stage);
     }
 
     DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
