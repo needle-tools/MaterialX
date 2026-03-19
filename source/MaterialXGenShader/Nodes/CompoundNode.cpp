@@ -64,13 +64,16 @@ void CompoundNode::emitFunctionDefinition(const ShaderNode& node, GenContext& co
 {
     DEFINE_SHADER_STAGE(stage, Stage::VERTEX)
     {
-        // When displacement is active, emit function definitions for
-        // displacement-related internal nodes only. We collect the relevant
-        // nodes (same as emitFunctionCall) and emit definitions for those.
+        // When displacement is active, emit a vertex-stage displacement
+        // function. This is the same pattern as the pixel stage: emit
+        // function definitions for internal nodes, then emit the compound
+        // function itself. Using a function call avoids all variable
+        // collision and ordering issues that arise from inlining.
         if (context.getEmitVertexDisplacement())
         {
             const ShaderGenerator& shadergen = context.getShaderGenerator();
 
+            // Collect displacement-relevant internal nodes
             std::set<const ShaderNode*> relevantNodes;
             std::function<void(const ShaderNode*)> collectUpstream = [&](const ShaderNode* n) {
                 if (!n || relevantNodes.count(n)) return;
@@ -92,13 +95,69 @@ void CompoundNode::emitFunctionDefinition(const ShaderNode& node, GenContext& co
                         collectUpstream(outputSocket->getConnection()->getNode());
                 }
             }
+
+            // Emit function definitions for displacement-relevant nodes.
+            // Use emitFunctionDefinition which handles library includes
+            // (e.g. mx_math.glsl for mx_sin/mx_cos defines).
             for (const ShaderNode* internalNode : _rootGraph->getNodes())
             {
                 if (relevantNodes.count(internalNode))
                 {
-                    stage.addFunctionDefinition(*internalNode, context);
+                    shadergen.emitFunctionDefinition(*internalNode, context, stage);
                 }
             }
+
+            // Emit the compound displacement function definition.
+            // This follows the same pattern as the pixel stage but only
+            // includes displacement-relevant internal nodes.
+            const string vertFuncName = _functionName + "_displacement";
+            shadergen.emitLineBegin(stage);
+            shadergen.emitString("void " + vertFuncName + "(", stage);
+
+            string delim;
+            // Add all inputs (interface parameters)
+            for (ShaderGraphInputSocket* inputSocket : _rootGraph->getInputSockets())
+            {
+                shadergen.emitString(delim, stage);
+                shadergen.emitFunctionDefinitionParameter(inputSocket, false, context, stage);
+                delim = ", ";
+            }
+            // Add displacement-related outputs only
+            for (ShaderGraphOutputSocket* outputSocket : _rootGraph->getOutputSockets())
+            {
+                const TypeDesc& outType = outputSocket->getType();
+                if (outType == Type::DISPLACEMENTSHADER ||
+                    (!outType.isClosure() && outType.getSemantic() != TypeDesc::SEMANTIC_SHADER))
+                {
+                    shadergen.emitString(delim, stage);
+                    shadergen.emitFunctionDefinitionParameter(outputSocket, true, context, stage);
+                    delim = ", ";
+                }
+            }
+            shadergen.emitString(")", stage);
+            shadergen.emitLineEnd(stage, false);
+
+            // Function body
+            shadergen.emitFunctionBodyBegin(*_rootGraph, context, stage);
+            for (const ShaderNode* internalNode : _rootGraph->getNodes())
+            {
+                if (relevantNodes.count(internalNode))
+                {
+                    shadergen.emitFunctionCall(*internalNode, context, stage);
+                }
+            }
+            // Assign outputs
+            for (ShaderGraphOutputSocket* outputSocket : _rootGraph->getOutputSockets())
+            {
+                const TypeDesc& outType = outputSocket->getType();
+                if (outType == Type::DISPLACEMENTSHADER ||
+                    (!outType.isClosure() && outType.getSemantic() != TypeDesc::SEMANTIC_SHADER))
+                {
+                    const string result = shadergen.getUpstreamResult(outputSocket, context);
+                    shadergen.emitLine(outputSocket->getVariable() + " = " + result, stage);
+                }
+            }
+            shadergen.emitFunctionBodyEnd(*_rootGraph, context, stage);
         }
     }
 
@@ -189,37 +248,27 @@ void CompoundNode::emitFunctionCall(const ShaderNode& node, GenContext& context,
     {
         if (context.getEmitVertexDisplacement())
         {
-            // When evaluating displacement dependencies, only emit internal
-            // nodes that contribute to non-surfaceshader outputs (e.g. vector3
-            // displacement offset outputs). This prevents surface shader
-            // internals (closures, BSDFs, etc.) from being emitted in the
-            // vertex stage.
-            std::set<const ShaderNode*> relevantNodes;
-            std::function<void(const ShaderNode*)> collectUpstream = [&](const ShaderNode* n) {
-                if (!n || relevantNodes.count(n)) return;
-                relevantNodes.insert(n);
-                for (ShaderInput* input : n->getInputs())
-                {
-                    const ShaderNode* upstream = input->getConnectedSibling();
-                    if (upstream && upstream->getParent() == _rootGraph.get())
-                        collectUpstream(upstream);
-                }
-            };
-            for (ShaderGraphOutputSocket* outputSocket : _rootGraph->getOutputSockets())
+            // Call the vertex-stage displacement function (defined in
+            // emitFunctionDefinition above). This avoids all variable
+            // collision and ordering issues from inlining.
+            const string vertFuncName = _functionName + "_displacement";
+
+            // Declare output variables
+            emitOutputVariables(node, context, stage);
+
+            // Emit function call
+            shadergen.emitLineBegin(stage);
+            shadergen.emitString(vertFuncName + "(", stage);
+
+            string delim;
+            // Pass all inputs
+            for (ShaderInput* input : node.getInputs())
             {
-                // Follow displacement-related outputs: displacementshader type,
-                // or non-closure/non-shader outputs (e.g. vector3 offset).
-                // Skip surfaceshader/volumeshader/lightshader outputs.
-                const TypeDesc& outType = outputSocket->getType();
-                if (outType == Type::DISPLACEMENTSHADER ||
-                    (!outType.isClosure() && outType.getSemantic() != TypeDesc::SEMANTIC_SHADER))
-                {
-                    if (outputSocket->getConnection())
-                        collectUpstream(outputSocket->getConnection()->getNode());
-                }
+                shadergen.emitString(delim, stage);
+                shadergen.emitInput(input, context, stage);
+                delim = ", ";
             }
-            // Declare displacement output variables before the scoped block
-            // so they're visible to the calling code (emitVertexStage).
+            // Pass displacement output variables
             for (size_t i = 0; i < node.numOutputs(); ++i)
             {
                 const ShaderOutput* nodeOutput = node.getOutput(i);
@@ -227,68 +276,14 @@ void CompoundNode::emitFunctionCall(const ShaderNode& node, GenContext& context,
                 if (outType == Type::DISPLACEMENTSHADER ||
                     (!outType.isClosure() && outType.getSemantic() != TypeDesc::SEMANTIC_SHADER))
                 {
-                    shadergen.emitLineBegin(stage);
-                    shadergen.emitOutput(nodeOutput, true, false, context, stage);
-                    shadergen.emitLineEnd(stage);
+                    shadergen.emitString(delim, stage);
+                    shadergen.emitOutput(nodeOutput, false, false, context, stage);
+                    delim = ", ";
                 }
             }
 
-            // Use a scope block for internal nodes to prevent variable name
-            // collisions. Compound functions normally run in their own function
-            // scope, but displacement inlines into main().
-            shadergen.emitScopeBegin(stage);
-
-            // Bind interface parameters as local variables.
-            for (ShaderInput* nodeInput : node.getInputs())
-            {
-                for (ShaderGraphInputSocket* socket : _rootGraph->getInputSockets())
-                {
-                    if (socket->getName() == nodeInput->getName())
-                    {
-                        const string& paramVar = socket->getVariable();
-                        shadergen.emitLineBegin(stage);
-                        shadergen.emitString(shadergen.getSyntax().getTypeName(socket->getType()) + " " + paramVar + " = ", stage);
-                        shadergen.emitInput(nodeInput, context, stage);
-                        shadergen.emitLineEnd(stage);
-                        break;
-                    }
-                }
-            }
-
-            // Emit displacement-relevant internal nodes
-            for (const ShaderNode* internalNode : _rootGraph->getNodes())
-            {
-                if (relevantNodes.count(internalNode))
-                {
-                    shadergen.emitFunctionCall(*internalNode, context, stage);
-                }
-            }
-
-            // Assign output variables from the internal results
-            for (size_t i = 0; i < node.numOutputs(); ++i)
-            {
-                const ShaderOutput* nodeOutput = node.getOutput(i);
-                const TypeDesc& outType = nodeOutput->getType();
-                if (outType == Type::DISPLACEMENTSHADER ||
-                    (!outType.isClosure() && outType.getSemantic() != TypeDesc::SEMANTIC_SHADER))
-                {
-                    for (ShaderGraphOutputSocket* outputSocket : _rootGraph->getOutputSockets())
-                    {
-                        if (outputSocket->getName() == nodeOutput->getName() ||
-                            (i < _rootGraph->numOutputSockets() && _rootGraph->getOutputSocket(i) == outputSocket))
-                        {
-                            if (outputSocket->getConnection())
-                            {
-                                const string result = shadergen.getUpstreamResult(outputSocket, context);
-                                shadergen.emitLine(nodeOutput->getVariable() + " = " + result, stage);
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-
-            shadergen.emitScopeEnd(stage);
+            shadergen.emitString(")", stage);
+            shadergen.emitLineEnd(stage);
         }
         else
         {

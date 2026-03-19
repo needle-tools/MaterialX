@@ -50,7 +50,11 @@ void HwPositionNode::emitFunctionCall(const ShaderNode& node, GenContext& contex
             if (!position->isEmitted())
             {
                 position->setEmitted();
-                shadergen.emitLine(prefix + position->getVariable() + " = hPositionWorld.xyz", stage);
+                // Compute world position from globals. Avoids referencing
+                // main()-local variables which aren't accessible from
+                // compound displacement functions.
+                shadergen.emitLine(prefix + position->getVariable() + " = (" +
+                    HW::T_WORLD_MATRIX + " * vec4(" + HW::T_IN_POSITION + ", 1.0)).xyz", stage);
             }
         }
         else
@@ -70,7 +74,7 @@ void HwPositionNode::emitFunctionCall(const ShaderNode& node, GenContext& contex
             shadergen.emitLineBegin(stage);
             shadergen.emitOutput(node.getOutput(), true, false, context, stage);
             if (space == WORLD_SPACE)
-                shadergen.emitString(" = hPositionWorld.xyz", stage);
+                shadergen.emitString(" = (" + HW::T_WORLD_MATRIX + " * vec4(" + HW::T_IN_POSITION + ", 1.0)).xyz", stage);
             else
                 shadergen.emitString(" = " + HW::T_IN_POSITION, stage);
             shadergen.emitLineEnd(stage);
