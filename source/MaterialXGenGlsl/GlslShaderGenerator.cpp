@@ -219,6 +219,18 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
             displacementNode = node;
             break;
         }
+        // Also check MaterialNode's displacementshader input — the displacement
+        // may be connected through a nodedef compound node rather than being
+        // a direct top-level node in the graph.
+        if (node->getOutput()->getType() == Type::MATERIAL)
+        {
+            const ShaderInput* dispInput = node->getInput(ShaderNode::DISPLACEMENTSHADER);
+            if (dispInput && dispInput->getConnection())
+            {
+                displacementNode = dispInput->getConnection()->getNode();
+                break;
+            }
+        }
     }
     if (displacementNode)
     {
