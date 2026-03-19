@@ -87,7 +87,8 @@ void HwSurfaceNode::emitFunctionCall(const ShaderNode& node, GenContext& context
         if (!position->isEmitted())
         {
             position->setEmitted();
-            shadergen.emitLine(prefix + position->getVariable() + " = hPositionWorld.xyz", stage);
+            shadergen.emitLine(prefix + position->getVariable() + " = (" +
+                HW::T_WORLD_MATRIX + " * " + syntax.getTypeName(Type::VECTOR4) + "(" + HW::T_IN_POSITION + ", 1.0)).xyz", stage);
         }
         ShaderPort* normal = vertexData[HW::T_NORMAL_WORLD];
         if (!normal->isEmitted())

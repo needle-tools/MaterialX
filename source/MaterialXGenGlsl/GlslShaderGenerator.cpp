@@ -364,6 +364,10 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
         emitLineBreak(stage);
 
         context.setEmitVertexDisplacement(true);
+
+        // Include the same common math library used by the pixel stage.
+        // Displacement graphs may use any math function (sin, cos, noise, etc.).
+        emitCommonMathLibrary(context, stage);
     }
 
     emitFunctionDefinitions(graph, context, stage);
@@ -446,6 +450,11 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
 
     context.setEmitVertexDisplacement(false);
     emitFunctionBodyEnd(graph, context, stage);
+}
+
+void GlslShaderGenerator::emitCommonMathLibrary(GenContext& context, ShaderStage& stage) const
+{
+    emitLibraryInclude("stdlib/genglsl/lib/mx_math.glsl", context, stage);
 }
 
 void GlslShaderGenerator::emitSpecularEnvironment(GenContext& context, ShaderStage& stage) const
@@ -645,7 +654,7 @@ void GlslShaderGenerator::emitPixelStage(const ShaderGraph& graph, GenContext& c
     emitOutputs(context, stage);
 
     // Add common math functions
-    emitLibraryInclude("stdlib/genglsl/lib/mx_math.glsl", context, stage);
+    emitCommonMathLibrary(context, stage);
     emitLineBreak(stage);
 
     // Determine whether lighting is required
