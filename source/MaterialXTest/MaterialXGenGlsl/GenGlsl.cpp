@@ -297,4 +297,17 @@ TEST_CASE("GenShader: GLSL Displacement", "[genglsl][displacement]")
         // No uniform initializers in ESSL
         REQUIRE(vs.find("uniform") != std::string::npos);
     }
+
+    SECTION("Complex displacement: multioutput nodedef with noise and scoped variables")
+    {
+        auto [vs, ps] = generateFromMtlx(
+            "resources/Materials/TestSuite/pbrlib/displacement/complex_displacement.mtlx", glslGen);
+        REQUIRE(vs.find("displacedPosition") != std::string::npos);
+        // Noise function definition must be in vertex stage
+        REQUIRE(vs.find("mx_fractal3d") != std::string::npos);
+        // No surface shader internals leaked
+        REQUIRE(vs.find("coat_roughness") == std::string::npos);
+        // Scope block must be present to prevent variable collisions
+        REQUIRE(vs.find("{") != std::string::npos);
+    }
 }
