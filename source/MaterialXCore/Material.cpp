@@ -22,7 +22,19 @@ vector<NodePtr> getShaderNodes(NodePtr materialNode, const string& nodeType, con
         {
             if (!nodeType.empty() && shaderNode->getType() != nodeType)
             {
-                continue;
+                // For multioutput nodes, accept if the material input type
+                // matches the requested type (e.g. surfaceshader input connected
+                // to a multioutput node that has both surfaceshader and
+                // displacementshader outputs).
+                if (shaderNode->getType() == MULTI_OUTPUT_TYPE_STRING &&
+                    input->getType() == nodeType)
+                {
+                    // Valid: the input type matches even though the node type is multioutput
+                }
+                else
+                {
+                    continue;
+                }
             }
 
             if (!target.empty())
