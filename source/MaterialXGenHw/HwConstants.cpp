@@ -19,6 +19,7 @@ const string T_IN_TEXCOORD                    = "$inTexcoord";
 const string T_IN_GEOMPROP                    = "$inGeomprop";
 const string T_IN_COLOR                       = "$inColor";
 const string T_POSITION_WORLD                 = "$positionWorld";
+const string T_DISPLACEMENT_ACTIVE            = "displacementActive";
 const string T_NORMAL_WORLD                   = "$normalWorld";
 const string T_TANGENT_WORLD                  = "$tangentWorld";
 const string T_BITANGENT_WORLD                = "$bitangentWorld";

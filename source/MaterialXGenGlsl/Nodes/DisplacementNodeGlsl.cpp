@@ -15,14 +15,15 @@ ShaderNodeImplPtr DisplacementNodeGlsl::create()
     return std::make_shared<DisplacementNodeGlsl>();
 }
 
-void DisplacementNodeGlsl::createVariables(const ShaderNode& node, GenContext&, Shader& shader) const
+void DisplacementNodeGlsl::createVariables(const ShaderNode&, GenContext&, Shader& shader) const
 {
     ShaderStage& vs = shader.getStage(Stage::VERTEX);
     ShaderStage& ps = shader.getStage(Stage::PIXEL);
 
-    // Add displacement as a vertex-to-pixel connector so the pixel stage
-    // can access the computed displacement if needed.
-    addStageConnector(HW::VERTEX_DATA, Type::DISPLACEMENTSHADER, node.getOutput()->getVariable(), vs, ps);
+    // Add a simple float marker to signal displacement to the pixel stage.
+    // We use a float instead of the displacementshader struct because
+    // ESSL 300 (WebGL 2) does not support struct varyings.
+    addStageConnector(HW::VERTEX_DATA, Type::FLOAT, HW::T_DISPLACEMENT_ACTIVE, vs, ps);
 }
 
 void DisplacementNodeGlsl::emitFunctionCall(const ShaderNode& node, GenContext& context, ShaderStage& stage) const
@@ -78,31 +79,24 @@ void DisplacementNodeGlsl::emitFunctionCall(const ShaderNode& node, GenContext& 
         shadergen.emitString(")", stage);
         shadergen.emitLineEnd(stage);
 
-        // Pass displacement to pixel stage via vertex data connector.
+        // Signal displacement to the pixel stage via a float marker varying.
+        // We use a float instead of the displacementshader struct because
+        // ESSL 300 (WebGL 2) does not support struct varyings.
         VariableBlock& vertexData = stage.getOutputBlock(HW::VERTEX_DATA);
         const string prefix = shadergen.getVertexDataPrefix(vertexData);
-        ShaderPort* port = vertexData[output->getVariable()];
-        if (port && !port->isEmitted())
+        ShaderPort* marker = vertexData[HW::T_DISPLACEMENT_ACTIVE];
+        if (marker && !marker->isEmitted())
         {
-            port->setEmitted();
-            shadergen.emitLine(prefix + port->getVariable() + " = " + output->getVariable(), stage);
+            marker->setEmitted();
+            shadergen.emitLine(prefix + marker->getVariable() + " = 1.0", stage);
         }
     }
 
     DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
     {
-        // In the pixel stage, read displacement from the vertex data connector.
-        VariableBlock& vertexData = stage.getInputBlock(HW::VERTEX_DATA);
-        const string prefix = shadergen.getVertexDataPrefix(vertexData);
-        const ShaderOutput* output = node.getOutput();
-        const ShaderPort* port = vertexData[output->getVariable()];
-        if (port)
-        {
-            shadergen.emitLineBegin(stage);
-            shadergen.emitOutput(output, true, false, context, stage);
-            shadergen.emitString(" = " + prefix + port->getVariable(), stage);
-            shadergen.emitLineEnd(stage);
-        }
+        // No displacement data is passed to the pixel stage.
+        // Normal recomputation uses dFdx/dFdy of the displaced world position
+        // and is triggered by detecting the displacement marker in vertex data.
     }
 }
 

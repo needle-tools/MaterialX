@@ -122,7 +122,7 @@ void HwSurfaceNode::emitFunctionCall(const ShaderNode& node, GenContext& context
         bool hasDisplacement = false;
         for (size_t vi = 0; vi < vertexData.size(); ++vi)
         {
-            if (vertexData[vi]->getType() == Type::DISPLACEMENTSHADER)
+            if (vertexData[vi]->getVariable() == HW::T_DISPLACEMENT_ACTIVE)
             {
                 hasDisplacement = true;
                 break;
