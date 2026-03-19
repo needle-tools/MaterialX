@@ -49,6 +49,12 @@ void HwTexCoordNode::emitFunctionCall(const ShaderNode& node, GenContext& contex
             shadergen.emitLine(prefix + texcoord->getVariable() + " = " + HW::T_IN_TEXCOORD + "_" + index, stage);
             texcoord->setEmitted();
         }
+
+        // Declare the output variable so displacement dependencies can use it.
+        shadergen.emitLineBegin(stage);
+        shadergen.emitOutput(output, true, false, context, stage);
+        shadergen.emitString(" = " + HW::T_IN_TEXCOORD + "_" + index, stage);
+        shadergen.emitLineEnd(stage);
     }
 
     DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
