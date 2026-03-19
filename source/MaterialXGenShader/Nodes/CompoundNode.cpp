@@ -163,8 +163,48 @@ void CompoundNode::emitFunctionCall(const ShaderNode& node, GenContext& context,
 
     DEFINE_SHADER_STAGE(stage, Stage::VERTEX)
     {
-        // Emit function calls for all child nodes to the vertex shader stage
-        shadergen.emitFunctionCalls(*_rootGraph, context, stage);
+        if (context.getEmitVertexDisplacement())
+        {
+            // When evaluating displacement dependencies, only emit internal
+            // nodes that contribute to non-surfaceshader outputs (e.g. vector3
+            // displacement offset outputs). This prevents surface shader
+            // internals (closures, BSDFs, etc.) from being emitted in the
+            // vertex stage.
+            std::set<const ShaderNode*> relevantNodes;
+            std::function<void(const ShaderNode*)> collectUpstream = [&](const ShaderNode* n) {
+                if (!n || relevantNodes.count(n)) return;
+                relevantNodes.insert(n);
+                for (ShaderInput* input : n->getInputs())
+                {
+                    const ShaderNode* upstream = input->getConnectedSibling();
+                    if (upstream && upstream->getParent() == _rootGraph.get())
+                        collectUpstream(upstream);
+                }
+            };
+            for (ShaderGraphOutputSocket* outputSocket : _rootGraph->getOutputSockets())
+            {
+                // Only follow non-closure, non-shader outputs (e.g. vector3 displacement offset)
+                if (!outputSocket->getType().isClosure() &&
+                    outputSocket->getType().getSemantic() != TypeDesc::SEMANTIC_SHADER)
+                {
+                    if (outputSocket->getConnection())
+                        collectUpstream(outputSocket->getConnection()->getNode());
+                }
+            }
+            // Emit only the relevant nodes in topological order
+            for (const ShaderNode* internalNode : _rootGraph->getNodes())
+            {
+                if (relevantNodes.count(internalNode))
+                {
+                    shadergen.emitFunctionCall(*internalNode, context, stage);
+                }
+            }
+        }
+        else
+        {
+            // Standard vertex stage: emit function calls for all child nodes
+            shadergen.emitFunctionCalls(*_rootGraph, context, stage);
+        }
     }
 
     DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
