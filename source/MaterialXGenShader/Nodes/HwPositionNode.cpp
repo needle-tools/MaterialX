@@ -63,19 +63,18 @@ void HwPositionNode::emitFunctionCall(const ShaderNode& node, GenContext& contex
             }
         }
 
-        // Also declare the node's output variable in the vertex stage so
-        // displacement dependency nodes can reference it directly.
-        shadergen.emitLineBegin(stage);
-        shadergen.emitOutput(node.getOutput(), true, false, context, stage);
-        if (space == WORLD_SPACE)
+        // Declare the output variable so displacement dependencies can use it.
+        // Only when displacement is being evaluated to avoid redeclaration.
+        if (context.getEmitVertexDisplacement())
         {
-            shadergen.emitString(" = hPositionWorld.xyz", stage);
+            shadergen.emitLineBegin(stage);
+            shadergen.emitOutput(node.getOutput(), true, false, context, stage);
+            if (space == WORLD_SPACE)
+                shadergen.emitString(" = hPositionWorld.xyz", stage);
+            else
+                shadergen.emitString(" = " + HW::T_IN_POSITION, stage);
+            shadergen.emitLineEnd(stage);
         }
-        else
-        {
-            shadergen.emitString(" = " + HW::T_IN_POSITION, stage);
-        }
-        shadergen.emitLineEnd(stage);
     }
 
     DEFINE_SHADER_STAGE(stage, Stage::PIXEL)
