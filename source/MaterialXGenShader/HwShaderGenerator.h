@@ -95,6 +95,7 @@ extern MX_GENSHADER_API const string T_IN_TEXCOORD;
 extern MX_GENSHADER_API const string T_IN_GEOMPROP;
 extern MX_GENSHADER_API const string T_IN_COLOR;
 extern MX_GENSHADER_API const string T_POSITION_WORLD;
+extern MX_GENSHADER_API const string T_DISPLACEMENT_ACTIVE;
 extern MX_GENSHADER_API const string T_NORMAL_WORLD;
 extern MX_GENSHADER_API const string T_TANGENT_WORLD;
 extern MX_GENSHADER_API const string T_BITANGENT_WORLD;

@@ -226,6 +226,8 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
         // causes binding conflicts in GlslProgram::updateUniformsList().
         // Shared GLSL uniforms between vertex and pixel stages are fine —
         // they reference the same uniform location.
+        // ESSL 300 (WebGL 2) does not support uniform initializers.
+        const bool assignValues = (getVersion().find("es") == string::npos);
         emitComment("Public uniforms (shared with pixel stage)", stage);
         for (ShaderGraphInputSocket* inputSocket : graph.getInputSockets())
         {
@@ -249,17 +251,24 @@ void GlslShaderGenerator::emitVertexStage(const ShaderGraph& graph, GenContext& 
                 continue;
             }
 
-            string valueStr;
-            if (inputSocket->getValue())
+            if (assignValues)
             {
-                valueStr = _syntax->getValue(type, *inputSocket->getValue());
+                string valueStr;
+                if (inputSocket->getValue())
+                {
+                    valueStr = _syntax->getValue(type, *inputSocket->getValue());
+                }
+                else
+                {
+                    valueStr = _syntax->getDefaultValue(type);
+                }
+                emitLine(qualifier + " " + typeName + " " + inputSocket->getVariable() +
+                         (valueStr.empty() ? "" : " = " + valueStr), stage);
             }
             else
             {
-                valueStr = _syntax->getDefaultValue(type);
+                emitLine(qualifier + " " + typeName + " " + inputSocket->getVariable(), stage);
             }
-            emitLine(qualifier + " " + typeName + " " + inputSocket->getVariable() +
-                     (valueStr.empty() ? "" : " = " + valueStr), stage);
         }
         emitLineBreak(stage);
 

@@ -87,13 +87,13 @@ void SurfaceNodeGlsl::emitFunctionCall(const ShaderNode& node, GenContext& conte
 
         shadergen.emitScopeBegin(stage);
 
-        // Check if displacement is active by looking for a displacement
-        // variable in the vertex data. When active, recompute the geometric
+        // Check if displacement is active by looking for the displacement
+        // marker in the vertex data. When active, recompute the geometric
         // normal from screen-space derivatives of the displaced world position.
         bool hasDisplacement = false;
         for (size_t vi = 0; vi < vertexData.size(); ++vi)
         {
-            if (vertexData[vi]->getType() == Type::DISPLACEMENTSHADER)
+            if (vertexData[vi]->getVariable() == HW::T_DISPLACEMENT_ACTIVE)
             {
                 hasDisplacement = true;
                 break;
