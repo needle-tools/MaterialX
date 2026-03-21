@@ -261,7 +261,32 @@ void GlslProgram::bindAttribute(const GlslProgram::InputMap& inputs, MeshPtr mes
         MeshStreamPtr stream = mesh->getStream(input.first);
         if (!stream)
         {
-            throw ExceptionRenderError("Geometry buffer could not be retrieved for binding: " + input.first + ". Index: " + std::to_string(index));
+            // Generate default data for missing vertex color attributes (white, alpha=1).
+            // This allows shaders that require vertex colors to render on meshes without them.
+            if (input.first.find("color") != std::string::npos || input.first.find("i_color") != std::string::npos)
+            {
+                auto posStream = mesh->getStream(MeshStream::POSITION_ATTRIBUTE, 0);
+                if (posStream)
+                {
+                    size_t vertexCount = posStream->getData().size() / posStream->getStride();
+                    stream = MeshStream::create(input.first, MeshStream::COLOR_ATTRIBUTE, index);
+                    stream->setStride(4);
+                    auto& data = stream->getData();
+                    data.resize(vertexCount * 4);
+                    for (size_t i = 0; i < vertexCount; i++)
+                    {
+                        data[i * 4 + 0] = 1.0f;
+                        data[i * 4 + 1] = 1.0f;
+                        data[i * 4 + 2] = 1.0f;
+                        data[i * 4 + 3] = 1.0f;
+                    }
+                    mesh->addStream(stream);
+                }
+            }
+            if (!stream)
+            {
+                throw ExceptionRenderError("Geometry buffer could not be retrieved for binding: " + input.first + ". Index: " + std::to_string(index));
+            }
         }
         MeshFloatBuffer& attributeData = stream->getData();
         stride = stream->getStride();
