@@ -132,20 +132,9 @@ void applyModifiers(mx::DocumentPtr doc, const DocumentModifiers& modifiers)
         }
     }
 
-    // Remap unsupported texture coordinate indices.
-    for (mx::ElementPtr elem : doc->traverseTree())
-    {
-        mx::NodePtr node = elem->asA<mx::Node>();
-        if (node && node->getCategory() == "texcoord")
-        {
-            mx::InputPtr index = node->getInput("index");
-            mx::ValuePtr value = index ? index->getValue() : nullptr;
-            if (value && value->isA<int>() && value->asA<int>() != 0)
-            {
-                index->setValue(0);
-            }
-        }
-    }
+    // NOTE: Multiple texture coordinate sets (UV0-UV3) are now supported.
+    // CgltfLoader loads all TEXCOORD_N attributes from glTF, and
+    // GlslProgram falls back to texcoord_0 for missing sets on OBJ geometry.
 }
 
 } // anonymous namespace
