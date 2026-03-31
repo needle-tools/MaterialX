@@ -280,6 +280,12 @@ void GlslProgram::bindAttribute(const GlslProgram::InputMap& inputs, MeshPtr mes
                     mesh->addStream(stream);
                 }
             }
+            // Fall back to texcoord_0 for missing higher UV sets (UV1, UV2, UV3).
+            // Geometry formats like OBJ only support a single UV set.
+            if (!stream && input.first.find("i_texcoord_") != std::string::npos)
+            {
+                stream = mesh->getStream(MeshStream::TEXCOORD_ATTRIBUTE, 0);
+            }
             if (!stream)
             {
                 throw ExceptionRenderError("Geometry buffer could not be retrieved for binding: " + input.first + ". Index: " + std::to_string(index));
