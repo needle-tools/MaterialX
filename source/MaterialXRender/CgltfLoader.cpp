@@ -402,13 +402,14 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
                                 for (cgltf_size v = 0; v < desiredVectorSize; v++)
                                 {
                                     float floatValue = (v < vectorSize) ? input[v] : 0.0f;
-                                    // Perform v-flip
-                                    if (isTexCoordStream && v == 1)
+                                    // Vertical flip of texture coordinates.
+                                    // When texcoordVerticalFlip is explicitly requested
+                                    // (e.g. for DCC tools that store UVs with V=0 at bottom),
+                                    // flip at the data level. Otherwise, leave UVs as-is and
+                                    // let the shader handle convention via hwTexcoordVerticalFlip.
+                                    if (isTexCoordStream && v == 1 && texcoordVerticalFlip)
                                     {
-                                        if (!texcoordVerticalFlip)
-                                        {
-                                            floatValue = 1.0f - floatValue;
-                                        }
+                                        floatValue = 1.0f - floatValue;
                                     }
                                     buffer.push_back(floatValue);
                                 }
