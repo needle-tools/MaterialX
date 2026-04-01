@@ -17,6 +17,7 @@ namespace
 
 const string INPUT_BSDF = "bsdf";
 const string INPUT_EDF = "edf";
+const string INPUT_OCCLUSION = "occlusion";
 const string INPUT_OPACITY = "opacity";
 
 } // anonymous namespace
@@ -188,6 +189,13 @@ void HwSurfaceNode::emitFunctionCall(const ShaderNode& node, GenContext& context
                 else
                 {
                     shadergen.emitLine("occlusion = 1.0", stage);
+                }
+                if (const ShaderInput* occlusionInput = node.getInput(INPUT_OCCLUSION))
+                {
+                    shadergen.emitLineBegin(stage);
+                    shadergen.emitString("occlusion *= ", stage);
+                    shadergen.emitInput(occlusionInput, context, stage);
+                    shadergen.emitLineEnd(stage);
                 }
                 shadergen.emitLineBreak(stage);
 

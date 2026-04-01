@@ -183,30 +183,31 @@ install(FILES ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/JsMaterialXGenShader.
 option(MATERIALX_BUILD_JS_PATCH_FOR_NEEDLE "Patch JS files for ES6 module compatibility (adds export default and fixes arrow function)" OFF)
 
 if(MATERIALX_BUILD_JS_PATCH_FOR_NEEDLE)
-    find_package(Git QUIET)
-    if(GIT_FOUND)
-        execute_process(
-            COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-            OUTPUT_VARIABLE GIT_COMMIT
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_QUIET
-        )
-    endif()
-    
-    if(NOT GIT_COMMIT)
-        set(GIT_COMMIT "unknown")
-    endif()
-    
-    string(TIMESTAMP BUILD_DATE "%Y-%m-%d %H:%M:%S")
-    file(WRITE ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/revision.json "{\n  \"commit\": \"${GIT_COMMIT}\",\n  \"version\": \"${MATERIALX_LIBRARY_VERSION}\",\n  \"buildDate\": \"${BUILD_DATE}\"\n}\n")
-    file(WRITE ${PROJECT_BINARY_DIR}/bin/revision.json "{\n  \"commit\": \"${GIT_COMMIT}\",\n  \"version\": \"${MATERIALX_LIBRARY_VERSION}\",\n  \"buildDate\": \"${BUILD_DATE}\"\n}\n")
-    
-    file(WRITE ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/SHA_${GIT_COMMIT} "")
-    file(WRITE ${PROJECT_BINARY_DIR}/bin/SHA_${GIT_COMMIT} "")
-    
-    install(FILES ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/revision.json DESTINATION JavaScript/MaterialX/)
-    install(FILES ${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX/SHA_${GIT_COMMIT} DESTINATION JavaScript/MaterialX/)
+    # Generate revision.json and SHA marker at BUILD time (not configure time)
+    # so the commit hash and timestamp reflect the actual build, not the last cmake run.
+    set(NEEDLE_REVISION_SCRIPT "${PROJECT_BINARY_DIR}/generate_revision.sh")
+    file(WRITE ${NEEDLE_REVISION_SCRIPT} "#!/bin/bash\n\
+COMMIT=\$(git -C \"${PROJECT_SOURCE_DIR}\" rev-parse HEAD 2>/dev/null || echo unknown)\n\
+VERSION=\"${MATERIALX_LIBRARY_VERSION}\"\n\
+DATE=\$(date '+%Y-%m-%d %H:%M:%S')\n\
+BINDIR=\"${PROJECT_BINARY_DIR}/bin\"\n\
+INSTALLDIR=\"${CMAKE_INSTALL_PREFIX}/JavaScript/MaterialX\"\n\
+# Remove old SHA files\n\
+rm -f \"\$BINDIR\"/SHA_* \"\$INSTALLDIR\"/SHA_* 2>/dev/null\n\
+# Write revision.json\n\
+for DIR in \"\$BINDIR\" \"\$INSTALLDIR\"; do\n\
+  mkdir -p \"\$DIR\"\n\
+  printf '{\\n  \"commit\": \"%s\",\\n  \"version\": \"%s\",\\n  \"buildDate\": \"%s\"\\n}\\n' \"\$COMMIT\" \"\$VERSION\" \"\$DATE\" > \"\$DIR/revision.json\"\n\
+  touch \"\$DIR/SHA_\$COMMIT\"\n\
+done\n\
+echo \"Generated revision.json (commit=\$COMMIT, version=\$VERSION, date=\$DATE)\"\n")
+    file(CHMOD ${NEEDLE_REVISION_SCRIPT} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+
+    add_custom_target(NeedleRevision ALL
+        COMMAND bash ${NEEDLE_REVISION_SCRIPT}
+        COMMENT "Generating MaterialX JS revision info"
+    )
+    add_dependencies(JsMaterialXGenShader NeedleRevision)
     
     set(PATCH_SCRIPT_CONTENT [[
 #!/bin/bash
