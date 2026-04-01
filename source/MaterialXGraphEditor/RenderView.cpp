@@ -150,6 +150,7 @@ RenderView::RenderView(mx::DocumentPtr doc,
     // Set default Glsl generator options.
     _genContext.getOptions().targetColorSpaceOverride = "lin_rec709";
     _genContext.getOptions().fileTextureVerticalFlip = true;
+    _genContext.getOptions().hwTexcoordVerticalFlip = true;
     _genContext.getOptions().hwShadowMap = true;
     // Make sure all uniforms are added so value updates can
     // find the corresponding uniform.
