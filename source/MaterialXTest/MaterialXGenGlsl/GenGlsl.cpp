@@ -125,6 +125,34 @@ TEST_CASE("GenShader: GLSL Light Shaders", "[genglsl]")
     REQUIRE_NOTHROW(mx::HwShaderGenerator::bindLightShader(*spotLightShader, 66, context));
 }
 
+TEST_CASE("GenShader: GLSL Texcoord Vertical Flip", "[genglsl]")
+{
+    mx::FileSearchPath searchPath = mx::getDefaultDataSearchPath();
+    mx::DocumentPtr doc = mx::createDocument();
+    loadLibraries({ "libraries" }, searchPath, doc);
+    readFromXmlFile(doc, searchPath.find("resources/Materials/TestSuite/stdlib/geometric/texcoord_orientation.mtlx"));
+
+    mx::TypedElementPtr material = doc->getNode("texcoord_orientation");
+    REQUIRE(material != nullptr);
+
+    mx::GenContext context(mx::GlslShaderGenerator::create());
+    context.registerSourceCodeSearchPath(searchPath);
+    context.getShaderGenerator().registerTypeDefs(doc);
+
+    context.getOptions().hwTexcoordVerticalFlip = false;
+    mx::ShaderPtr unflippedShader = context.getShaderGenerator().generate("texcoordOrientation", material, context);
+    REQUIRE(unflippedShader != nullptr);
+    const std::string& unflippedVertexSource = unflippedShader->getSourceCode(mx::Stage::VERTEX);
+    REQUIRE(unflippedVertexSource.find(" = i_texcoord_0") != std::string::npos);
+    REQUIRE(unflippedVertexSource.find("1.0 - i_texcoord_0.y") == std::string::npos);
+
+    context.getOptions().hwTexcoordVerticalFlip = true;
+    mx::ShaderPtr flippedShader = context.getShaderGenerator().generate("texcoordOrientation", material, context);
+    REQUIRE(flippedShader != nullptr);
+    const std::string& flippedVertexSource = flippedShader->getSourceCode(mx::Stage::VERTEX);
+    REQUIRE(flippedVertexSource.find("1.0 - i_texcoord_0.y") != std::string::npos);
+}
+
 #ifdef MATERIALX_BUILD_BENCHMARK_TESTS
 TEST_CASE("GenShader: GLSL Performance Test", "[genglsl]")
 {

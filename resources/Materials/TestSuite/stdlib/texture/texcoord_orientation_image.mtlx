@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="srgb_texture">
+  <texcoord name="uv0" type="vector2">
+    <input name="index" type="integer" value="0" />
+  </texcoord>
+  <image name="uv_orientation_image" type="color3">
+    <input name="file" type="filename" value="resources/Images/uv_orientation.bmp" />
+    <input name="default" type="color3" value="1, 0, 1" />
+    <input name="texcoord" type="vector2" nodename="uv0" />
+  </image>
+  <surface_unlit name="SR_texcoord_orientation_image" type="surfaceshader">
+    <input name="emission_color" type="color3" nodename="uv_orientation_image" />
+  </surface_unlit>
+  <surfacematerial name="texcoord_orientation_image" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="SR_texcoord_orientation_image" />
+  </surfacematerial>
+</materialx>
