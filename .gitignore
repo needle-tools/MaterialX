@@ -1,5 +1,24 @@
 build
+build-*/
 dist
 .DS_Store
 python/MaterialX/__pycache__
 python/MaterialX/*.so
+
+# Generated test logs and reference output.
+/*_generate_test.txt
+/*_implementation_check.txt
+/*_render_doc_validation_log.txt
+/*_render_log.txt
+/*_render_profiling_log.txt
+/render_*_test.txt
+/reference/
+
+# Generated render-test artifacts written beside MaterialX materials.
+/resources/Materials/**/*_glsl.png
+/resources/Materials/**/*_msl.png
+/resources/Materials/**/*_ps.glsl
+/resources/Materials/**/*_vs.glsl
+/resources/Materials/**/*_ps.metal
+/resources/Materials/**/*_vs.metal
+/resources/Materials/**/_osl_render/
