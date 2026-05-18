@@ -15,6 +15,7 @@
 
 #include <MaterialXTrace/Tracing.h>
 
+#include <algorithm>
 #include <iostream>
 
 MATERIALX_NAMESPACE_BEGIN
@@ -261,7 +262,25 @@ void GlslProgram::bindAttribute(const GlslProgram::InputMap& inputs, MeshPtr mes
         MeshStreamPtr stream = mesh->getStream(input.first);
         if (!stream)
         {
-            throw ExceptionRenderError("Geometry buffer could not be retrieved for binding: " + input.first + ". Index: " + std::to_string(index));
+            const bool isColorAttribute = input.first.rfind(HW::IN_COLOR + "_", 0) == 0;
+            if (isColorAttribute)
+            {
+                auto posStream = mesh->getStream(MeshStream::POSITION_ATTRIBUTE, 0);
+                if (posStream)
+                {
+                    size_t vertexCount = posStream->getData().size() / posStream->getStride();
+                    stream = MeshStream::create(input.first, MeshStream::COLOR_ATTRIBUTE, index);
+                    stream->setStride(4);
+                    auto& data = stream->getData();
+                    data.resize(vertexCount * 4);
+                    std::fill(data.begin(), data.end(), 1.0f);
+                    mesh->addStream(stream);
+                }
+            }
+            if (!stream)
+            {
+                throw ExceptionRenderError("Geometry buffer could not be retrieved for binding: " + input.first + ". Index: " + std::to_string(index));
+            }
         }
         MeshFloatBuffer& attributeData = stream->getData();
         stride = stream->getStride();
