@@ -5,8 +5,10 @@
 
 #include <MaterialXGenGlsl/Nodes/DisplacementNodeGlsl.h>
 
+#include <MaterialXGenHw/HwConstants.h>
+#include <MaterialXGenHw/HwShaderGenerator.h>
+#include <MaterialXGenShader/GenContext.h>
 #include <MaterialXGenShader/Shader.h>
-#include <MaterialXGenShader/HwShaderGenerator.h>
 
 MATERIALX_NAMESPACE_BEGIN
 
