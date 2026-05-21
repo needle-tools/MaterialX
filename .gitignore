@@ -23,3 +23,6 @@ python/MaterialX/*.so
 /resources/Materials/**/*_ps.metal
 /resources/Materials/**/*_vs.metal
 /resources/Materials/**/_osl_render/
+
+# Generated OSL shader objects.
+*.oso
