@@ -2,3 +2,5 @@ build
 dist
 .DS_Store
 CMakeUserPresets.json
+python/MaterialX/__pycache__
+python/MaterialX/*.so
