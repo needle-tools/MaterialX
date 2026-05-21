@@ -15,6 +15,9 @@
 #include <nanogui/messagedialog.h>
 #include <nanogui/opengl.h>
 
+#include <algorithm>
+#include <vector>
+
 namespace
 {
 
@@ -425,7 +428,21 @@ void GLRenderPipeline::renderFrame(void*, int shadowMapSize, const char* dirLigh
     {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        for (const auto& assignment : _viewer->_materialAssignments)
+        glDepthMask(GL_FALSE);
+
+        // Sort transparent assignments by partition name for deterministic
+        // draw order. The _materialAssignments map is keyed by pointer,
+        // which varies between runs.
+        using AssignmentPair = std::pair<mx::MeshPartitionPtr, mx::MaterialPtr>;
+        std::vector<AssignmentPair> sortedAssignments(
+            _viewer->_materialAssignments.begin(),
+            _viewer->_materialAssignments.end());
+        std::sort(sortedAssignments.begin(), sortedAssignments.end(),
+            [](const AssignmentPair& a, const AssignmentPair& b) {
+                return a.first->getName() < b.first->getName();
+            });
+
+        for (const auto& assignment : sortedAssignments)
         {
             mx::MeshPartitionPtr geom = assignment.first;
             mx::GlslMaterialPtr material = std::dynamic_pointer_cast<mx::GlslMaterial>(assignment.second);
@@ -448,6 +465,7 @@ void GLRenderPipeline::renderFrame(void*, int shadowMapSize, const char* dirLigh
             material->drawPartition(geom);
             material->unbindImages(imageHandler);
         }
+        glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
     }
 
