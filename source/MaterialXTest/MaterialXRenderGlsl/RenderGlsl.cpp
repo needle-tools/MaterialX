@@ -7,6 +7,7 @@
 #include <MaterialXTest/MaterialXRender/RenderUtil.h>
 
 #include <MaterialXGenGlsl/GlslShaderGenerator.h>
+#include <MaterialXRenderGlsl/GlslProgram.h>
 #include <MaterialXRenderGlsl/GlslRenderer.h>
 #include <MaterialXRenderGlsl/GLTextureHandler.h>
 
@@ -51,6 +52,59 @@ class GlslShaderRenderTester : public RenderUtil::ShaderRenderTester
     mx::GlslRendererPtr _renderer;
     mx::LightHandlerPtr _lightHandler;
 };
+
+TEST_CASE("Render: GLSL Missing Vertex Color Fallback", "[renderglsl]")
+{
+    mx::GlslRendererPtr renderer = mx::GlslRenderer::create();
+    REQUIRE_NOTHROW(renderer->initialize());
+
+    mx::GlslProgramPtr program = mx::GlslProgram::create();
+    program->addStage(mx::Stage::VERTEX,
+        "#version 330 core\n"
+        "in vec3 i_position;\n"
+        "in vec4 i_color_0;\n"
+        "out vec4 v_color;\n"
+        "void main() {\n"
+        "    v_color = i_color_0;\n"
+        "    gl_Position = vec4(i_position, 1.0);\n"
+        "}\n");
+    program->addStage(mx::Stage::PIXEL,
+        "#version 330 core\n"
+        "in vec4 v_color;\n"
+        "out vec4 fragColor;\n"
+        "void main() {\n"
+        "    fragColor = v_color;\n"
+        "}\n");
+    REQUIRE_NOTHROW(program->build());
+    REQUIRE(program->bind());
+
+    mx::MeshPtr mesh = mx::Mesh::create("position_only");
+    mx::MeshStreamPtr positions = mx::MeshStream::create("i_" + mx::MeshStream::POSITION_ATTRIBUTE, mx::MeshStream::POSITION_ATTRIBUTE, 0);
+    positions->setStride(mx::MeshStream::STRIDE_3D);
+    positions->getData() =
+    {
+        0.0f, 0.0f, 0.0f,
+        1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f
+    };
+    mesh->addStream(positions);
+    mesh->setVertexCount(3);
+
+    REQUIRE(mesh->getStream("i_" + mx::MeshStream::COLOR_ATTRIBUTE + "_0") == nullptr);
+    REQUIRE_NOTHROW(program->bindMesh(mesh));
+
+    mx::MeshStreamPtr colors = mesh->getStream("i_" + mx::MeshStream::COLOR_ATTRIBUTE + "_0");
+    REQUIRE(colors != nullptr);
+    REQUIRE(colors->getStride() == 4);
+    REQUIRE(colors->getSize() == 3);
+    for (float value : colors->getData())
+    {
+        REQUIRE(value == 1.0f);
+    }
+
+    program->unbindGeometry();
+    program->unbind();
+}
 
 // In addition to standard texture and shader definition libraries, additional lighting files
 // are loaded in. If no files are specified in the input options, a sample

@@ -15,6 +15,7 @@
 
 #include <MaterialXTrace/Tracing.h>
 
+#include <algorithm>
 #include <iostream>
 
 MATERIALX_NAMESPACE_BEGIN
@@ -265,6 +266,22 @@ void GlslProgram::bindAttribute(const GlslProgram::InputMap& inputs, MeshPtr mes
             if (input.first.find("i_texcoord_") != std::string::npos)
             {
                 stream = mesh->getStream(MeshStream::TEXCOORD_ATTRIBUTE, 0);
+            }
+
+            const bool isColorAttribute = input.first.rfind(HW::IN_COLOR + "_", 0) == 0;
+            if (!stream && isColorAttribute)
+            {
+                auto posStream = mesh->getStream(MeshStream::POSITION_ATTRIBUTE, 0);
+                if (posStream)
+                {
+                    size_t vertexCount = posStream->getData().size() / posStream->getStride();
+                    stream = MeshStream::create(input.first, MeshStream::COLOR_ATTRIBUTE, index);
+                    stream->setStride(4);
+                    auto& data = stream->getData();
+                    data.resize(vertexCount * 4);
+                    std::fill(data.begin(), data.end(), 1.0f);
+                    mesh->addStream(stream);
+                }
             }
             if (!stream)
             {
