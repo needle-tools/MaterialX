@@ -1261,6 +1261,9 @@ void Viewer::loadMesh(const mx::FilePath& filename)
     _geometryHandler->clearGeometry();
     if (_geometryHandler->loadGeometry(filename))
     {
+        const bool hwTexcoordVerticalFlip = _geometryHandler->requiresTexcoordVerticalFlip(filename);
+        const bool reloadRequired = _genContext.getOptions().hwTexcoordVerticalFlip != hwTexcoordVerticalFlip;
+        _genContext.getOptions().hwTexcoordVerticalFlip = hwTexcoordVerticalFlip;
         _meshFilename = filename;
         if (_splitByUdims)
         {
@@ -1294,6 +1297,10 @@ void Viewer::loadMesh(const mx::FilePath& filename)
         }
 
         invalidateShadowMap();
+        if (reloadRequired && !_materials.empty())
+        {
+            reloadShaders();
+        }
     }
     else
     {

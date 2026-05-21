@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <texcoord name="uv0" type="vector2">
+    <input name="index" type="integer" value="0" />
+  </texcoord>
+  <separate2 name="uv_components" type="multioutput">
+    <input name="in" type="vector2" nodename="uv0" />
+  </separate2>
+  <combine3 name="uv_color" type="color3">
+    <input name="in1" type="float" nodename="uv_components" output="outx" />
+    <input name="in2" type="float" nodename="uv_components" output="outy" />
+    <input name="in3" type="float" value="0" />
+  </combine3>
+  <surface_unlit name="SR_texcoord_orientation" type="surfaceshader">
+    <input name="emission_color" type="color3" nodename="uv_color" />
+  </surface_unlit>
+  <surfacematerial name="texcoord_orientation" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="SR_texcoord_orientation" />
+  </surfacematerial>
+</materialx>
