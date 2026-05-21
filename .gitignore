@@ -21,5 +21,6 @@ CMakeUserPresets.json
 /resources/Materials/**/*_glsl.png
 /resources/Materials/**/*_msl.png
 
+__pycache__/
 python/MaterialX/__pycache__
 python/MaterialX/*.so
