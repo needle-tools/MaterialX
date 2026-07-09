@@ -78,11 +78,11 @@ test.describe('Generate Shaders', () =>
 
         await page.route('**/*', routeHandler);
         await page.goto('http://materialx-test/');
+        await page.addScriptTag({ url: '/_build/JsMaterialXGenShader.js' });
 
         const { error, generators } = await page.evaluate(async () =>
         {
-            const { default: MaterialX } = await import('/_build/JsMaterialXGenShader.js');
-            const mx = await MaterialX();
+            const mx = await window.MaterialX();
 
             const doc = mx.createDocument();
             const ssName = 'SR_default';

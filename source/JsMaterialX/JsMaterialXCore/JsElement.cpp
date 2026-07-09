@@ -18,6 +18,55 @@
 namespace ems = emscripten;
 namespace mx = MaterialX;
 
+namespace
+{
+
+mx::ElementPtr copyElementToParent(mx::Element& source, mx::Element& parent, const std::string& name = mx::EMPTY_STRING)
+{
+    const std::string childName = name.empty() ? source.getName() : name;
+    mx::ElementPtr childCopy = parent.addChildOfCategory(source.getCategory(), childName);
+    childCopy->copyContentFrom(source.getSelf());
+    return childCopy;
+}
+
+mx::ElementPtr moveElementToParent(mx::Element& source, mx::Element& parent, const std::string& name = mx::EMPTY_STRING)
+{
+    for (mx::ElementPtr ancestor = parent.getSelf(); ancestor; ancestor = ancestor->getParent())
+    {
+        if (ancestor == source.getSelf())
+        {
+            throw mx::Exception("Cannot move an element into itself or one of its descendants");
+        }
+    }
+
+    mx::ElementPtr sourceParent = source.getParent();
+    if (!sourceParent)
+    {
+        throw mx::Exception("Cannot move an element without a parent");
+    }
+
+    const std::string sourceName = source.getName();
+    mx::ElementPtr movedElement = copyElementToParent(source, parent, name);
+    sourceParent->removeChild(sourceName);
+    return movedElement;
+}
+
+void setSourceUriRecursive(mx::Element& element, const std::string& sourceUri)
+{
+    element.setSourceUri(sourceUri);
+    for (mx::ElementPtr child : element.getChildren())
+    {
+        setSourceUriRecursive(*child, sourceUri);
+    }
+}
+
+void clearSourceUriRecursive(mx::Element& element)
+{
+    setSourceUriRecursive(element, mx::EMPTY_STRING);
+}
+
+}
+
 #define BIND_VALUE_ELEMENT_FUNC_INSTANCE(NAME, T)          \
     BIND_MEMBER_FUNC("setValue" #NAME, mx::ValueElement, setValue<T>, 1, 2, const T&, stRef)
 
@@ -35,6 +84,11 @@ namespace mx = MaterialX;
 
 EMSCRIPTEN_BINDINGS(element)
 {
+    BIND_FUNC("copyElementToParent", copyElementToParent, 2, 3, mx::Element&, mx::Element&, stRef)
+    BIND_FUNC("moveElementToParent", moveElementToParent, 2, 3, mx::Element&, mx::Element&, stRef)
+    ems::function("setSourceUriRecursive", &setSourceUriRecursive);
+    ems::function("clearSourceUriRecursive", &clearSourceUriRecursive);
+
     ems::class_<mx::ElementEquivalenceOptions>("ElementEquivalenceOptions")
         .constructor<>()
         .property("performValueComparisons", &mx::ElementEquivalenceOptions::performValueComparisons)
@@ -144,6 +198,10 @@ EMSCRIPTEN_BINDINGS(element)
         .function("getParent", ems::select_overload<mx::ConstElementPtr()const>(&mx::Element::getParent))
         .function("getRoot", ems::select_overload<mx::ConstElementPtr()const>(&mx::Element::getRoot))
         .function("getDocument", ems::select_overload<mx::ConstDocumentPtr()const>(&mx::Element::getDocument))
+        .function("getMutableSelf", ems::select_overload<mx::ElementPtr()>(&mx::Element::getSelf))
+        .function("getMutableParent", ems::select_overload<mx::ElementPtr()>(&mx::Element::getParent))
+        .function("getMutableRoot", ems::select_overload<mx::ElementPtr()>(&mx::Element::getRoot))
+        .function("getMutableDocument", ems::select_overload<mx::DocumentPtr()>(&mx::Element::getDocument))
         BIND_ELEMENT_FUNC_INSTANCE(Integer, int)
         BIND_ELEMENT_FUNC_INSTANCE(Boolean, bool)
         BIND_ELEMENT_FUNC_INSTANCE(Float, float)
