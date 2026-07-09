@@ -99,6 +99,7 @@ EMSCRIPTEN_BINDINGS(GenContext)
         .constructor<mx::ShaderGeneratorPtr>()
         .smart_ptr<std::shared_ptr<mx::GenContext>>("GenContextPtr")
         .function("getOptions", PTR_RETURN_OVERLOAD(mx::GenOptions& (mx::GenContext::*)(), &mx::GenContext::getOptions), ems::allow_raw_pointers())
+        .function("clearNodeImplementations", &mx::GenContext::clearNodeImplementations)
         ;
 
     ems::function("loadStandardLibraries", &loadStandardLibraries);
