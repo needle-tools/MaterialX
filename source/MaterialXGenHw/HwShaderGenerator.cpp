@@ -20,6 +20,39 @@
 
 MATERIALX_NAMESPACE_BEGIN
 
+namespace
+{
+
+void addPublicUniforms(ShaderGraph* graph, VariableBlock& publicUniforms, bool requireGraphPath)
+{
+    const string graphPathPrefix = graph->getName() + NAME_PATH_SEPARATOR;
+    for (ShaderGraphInputSocket* inputSocket : graph->getInputSockets())
+    {
+        // Only for inputs that are connected/used internally,
+        // and are editable by users.
+        if (!inputSocket->getConnections().empty() &&
+            graph->isEditable(*inputSocket) &&
+            (!requireGraphPath || inputSocket->getPath().rfind(graphPathPrefix, 0) == 0))
+        {
+            if (!publicUniforms.find(inputSocket->getVariable()))
+            {
+                publicUniforms.add(inputSocket->getSelf());
+            }
+        }
+    }
+
+    for (ShaderNode* node : graph->getNodes())
+    {
+        ShaderGraph* subgraph = node->getImplementation().getGraph();
+        if (subgraph)
+        {
+            addPublicUniforms(subgraph, publicUniforms, true);
+        }
+    }
+}
+
+} // namespace
+
 //
 // HwShaderGenerator methods
 //
@@ -152,7 +185,7 @@ ShaderPtr HwShaderGenerator::createShader(const string& name, ElementPtr element
     // All texture based objects should be added to Sampler block
 
     vs->createUniformBlock(HW::PRIVATE_UNIFORMS, "u_prv");
-    vs->createUniformBlock(HW::PUBLIC_UNIFORMS, "u_pub");
+    VariableBlockPtr vsPublicUniforms = vs->createUniformBlock(HW::PUBLIC_UNIFORMS, "u_pub");
 
     // Create required variables for vertex stage
     VariableBlock& vsInputs = vs->getInputBlock(HW::VERTEX_INPUTS);
@@ -228,16 +261,10 @@ ShaderPtr HwShaderGenerator::createShader(const string& name, ElementPtr element
         psPrivateUniforms->add(Type::INTEGER, HW::T_ENV_RADIANCE_MIPS, Value::createValue<int>(1));
     }
 
-    // Create uniforms for the published graph interface
-    for (ShaderGraphInputSocket* inputSocket : graph->getInputSockets())
-    {
-        // Only for inputs that are connected/used internally,
-        // and are editable by users.
-        if (!inputSocket->getConnections().empty() && graph->isEditable(*inputSocket))
-        {
-            psPublicUniforms->add(inputSocket->getSelf());
-        }
-    }
+    // Create uniforms for the published graph interface, including published
+    // sockets from compound nodegraph implementations in complete-interface mode.
+    addPublicUniforms(graph.get(), *vsPublicUniforms, true);
+    addPublicUniforms(graph.get(), *psPublicUniforms, false);
 
     // Add the pixel stage output. This needs to be a color4 for rendering,
     // so copy name and variable from the graph output but set type to color4.

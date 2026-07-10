@@ -365,6 +365,10 @@ void ShaderNode::initialize(const Node& node, const NodeDef& nodeDef, GenContext
         ValueElementPtr nodeDefInput = nodeDef.getActiveValueElement(nodeInput->getName());
         if (input && nodeDefInput)
         {
+            if (nodeInput->getIsUniform())
+            {
+                input->setUniform();
+            }
             ValuePtr portValue = nodeInput->getResolvedValue();
             if (!portValue)
             {

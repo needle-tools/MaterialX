@@ -949,7 +949,7 @@ void ShaderGraph::finalize(GenContext& context)
                 {
                     // Check if the type is editable otherwise we can't
                     // publish the input as an editable uniform.
-                    if (!input->getType().isClosure() && node->isEditable(*input))
+                    if (!input->getType().isClosure() && node->isEditable(*input) && input->isUniform())
                     {
                         // Use a consistent naming convention: <nodename>_<inputname>
                         // so application side can figure out what uniforms to set
@@ -964,10 +964,7 @@ void ShaderGraph::finalize(GenContext& context)
                             inputSocket->setValue(input->getValue());
                             inputSocket->setUnit(input->getUnit());
                             inputSocket->setColorSpace(input->getColorSpace());
-                            if (input->isUniform())
-                            {
-                                inputSocket->setUniform();
-                            }
+                            inputSocket->setUniform();
                         }
                         inputSocket->makeConnection(input);
                         inputSocket->setMetadata(input->getMetadata());

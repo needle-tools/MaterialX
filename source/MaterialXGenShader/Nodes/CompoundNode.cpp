@@ -47,12 +47,36 @@ void CompoundNode::initialize(const InterfaceElement& element, GenContext& conte
     _functionName = graph.getName();
     context.getShaderGenerator().getSyntax().makeValidName(_functionName);
 
-    // For compounds we do not want to publish all internal inputs
-    // so always use the reduced interface for this graph.
+    // Keep compound implementations reduced unless the caller explicitly asked
+    // for a complete shader interface on an authored document nodegraph. In
+    // complete mode, internal editable inputs are published as graph sockets
+    // so applications can bind them as exact path-addressable uniforms.
     const ShaderInterfaceType oldShaderInterfaceType = context.getOptions().shaderInterfaceType;
-    context.getOptions().shaderInterfaceType = SHADER_INTERFACE_REDUCED;
+    const bool publishCompleteInterface = oldShaderInterfaceType == SHADER_INTERFACE_COMPLETE && !graph.hasSourceUri();
+    if (!publishCompleteInterface)
+    {
+        context.getOptions().shaderInterfaceType = SHADER_INTERFACE_REDUCED;
+    }
     _rootGraph = ShaderGraph::create(nullptr, graph, context);
     context.getOptions().shaderInterfaceType = oldShaderInterfaceType;
+
+    if (publishCompleteInterface)
+    {
+        const string variablePrefix = _functionName + "_";
+        for (ShaderGraphInputSocket* inputSocket : _rootGraph->getInputSockets())
+        {
+            const string& variable = inputSocket->getVariable();
+            if (variable.rfind(variablePrefix, 0) != 0)
+            {
+                string suffix = variable;
+                while (!suffix.empty() && suffix[0] == '_')
+                {
+                    suffix.erase(0, 1);
+                }
+                inputSocket->setVariable(variablePrefix + suffix);
+            }
+        }
+    }
 
     // Set hash using the function name.
     // TODO: Could be improved to include the full function signature.
@@ -280,11 +304,21 @@ void CompoundNode::emitFunctionCall(const ShaderNode& node, GenContext& context,
             shadergen.emitString(vertFuncName + "(", stage);
 
             string delim;
-            // Pass all inputs
-            for (ShaderInput* input : node.getInputs())
+            // Pass all graph inputs. Interface inputs come from the compound
+            // node instance; internally published complete-interface inputs
+            // come from public uniforms using the graph socket variable.
+            for (ShaderGraphInputSocket* inputSocket : _rootGraph->getInputSockets())
             {
                 shadergen.emitString(delim, stage);
-                shadergen.emitInput(input, context, stage);
+                const ShaderInput* input = node.getInput(inputSocket->getName());
+                if (input)
+                {
+                    shadergen.emitInput(input, context, stage);
+                }
+                else
+                {
+                    shadergen.emitString(inputSocket->getVariable(), stage);
+                }
                 delim = ", ";
             }
             // Pass displacement output variables
@@ -335,11 +369,21 @@ void CompoundNode::emitFunctionCall(const ShaderNode& node, GenContext& context,
 
         string delim;
 
-        // Emit inputs.
-        for (ShaderInput* input : node.getInputs())
+        // Emit graph inputs. Interface inputs come from the compound node
+        // instance; internally published complete-interface inputs come from
+        // public uniforms using the graph socket variable.
+        for (ShaderGraphInputSocket* inputSocket : _rootGraph->getInputSockets())
         {
             shadergen.emitString(delim, stage);
-            shadergen.emitInput(input, context, stage);
+            const ShaderInput* input = node.getInput(inputSocket->getName());
+            if (input)
+            {
+                shadergen.emitInput(input, context, stage);
+            }
+            else
+            {
+                shadergen.emitString(inputSocket->getVariable(), stage);
+            }
             delim = ", ";
         }
 
