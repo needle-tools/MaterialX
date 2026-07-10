@@ -11,6 +11,7 @@
     var pathSep;                    // The path separator, depending on the environment
     var wasmPathSep = "/";          // The path separator in the WASM FS
     var ENVIRONMENT_IS_WEB;         // True if this code runs in a browser
+    var ENVIRONMENT_IS_WORKER;      // True if this code runs in a Web Worker
     var ENVIRONMENT_IS_NODE;        // True if this code runs in NodeJS
     var PATH_LIST_SEPARATOR = ";";  // The separator symbol for search paths
     var callId = 0;                 // Gets appended to the WASM root folder, to separate concurrent function calls
@@ -133,11 +134,10 @@
                 }
                 var sep = pathSep === "\\" ? "\\\\" : pathSep;
                 path.replace(new RegExp(sep, "g"), wasmPathSep);
-            } else if (ENVIRONMENT_IS_WEB) {
-                var link = document.createElement("a");
-                link.href = path;
-                if (link.origin + link.pathname + link.search + link.hash === path) {
-                    path = wasmRootFolder + link.pathname;
+            } else if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
+                var url = new URL(path, globalThis.location.href);
+                if (url.href === path) {
+                    path = wasmRootFolder + url.pathname;
                 }
             } else {
                 throw new Error("Unknown environment!");
@@ -175,7 +175,7 @@
     // Load a file depending on the environment.
     function loadFile(fileToLoad, searchPaths) {
         var promise;
-        if (ENVIRONMENT_IS_WEB) {
+        if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
             promise = fetchXml(fileToLoad, searchPaths);
         } else if (ENVIRONMENT_IS_NODE) {
             promise = loadXml(fileToLoad, searchPaths);
@@ -250,8 +250,8 @@
             var wasmCwd = wasmRootFolder + wasmPathSep + cwd.substring(parsed.root.length);
             var sep = pathSep === "\\" ? "\\\\" : pathSep;
             return wasmCwd.replace(new RegExp(sep, "g"), wasmPathSep);
-        } else if (ENVIRONMENT_IS_WEB) {
-            var cwd = window.location.pathname;
+        } else if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
+            var cwd = globalThis.location.pathname;
             cwd = cwd.substring(0, cwd.lastIndexOf(pathSep));
             return createFilePath(cwd, wasmRootFolder, wasmPathSep);
         } else {
@@ -286,11 +286,14 @@
     onModuleReady(function () {
         // Determine environment and load dependencies as required.
         ENVIRONMENT_IS_WEB = typeof window === "object";
+        ENVIRONMENT_IS_WORKER =
+            typeof WorkerGlobalScope === "function" &&
+            globalThis instanceof WorkerGlobalScope;
         ENVIRONMENT_IS_NODE =
             typeof process === "object" &&
             typeof process.versions === "object" &&
             typeof process.versions.node === "string";
-        if (ENVIRONMENT_IS_WEB) {
+        if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
             pathSep = "/";
         }
         if (ENVIRONMENT_IS_NODE) {

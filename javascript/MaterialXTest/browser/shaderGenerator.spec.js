@@ -13,6 +13,20 @@ const MIME_TYPES = {
     '.data': 'application/octet-stream'
 };
 
+const WORKER_SOURCE = `
+importScripts('/_build/JsMaterialXGenShader.js');
+self.onmessage = async (event) => {
+    try {
+    const mx = await MaterialX();
+    const doc = mx.createDocument();
+    await mx.readFromXmlString(doc, event.data, '');
+    const result = doc.validate();
+    self.postMessage({ valid: result.valid, message: result.message || '' });
+    } catch (error) {
+    self.postMessage({ valid: false, message: error?.message || String(error) });
+    }
+};`;
+
 //
 // Route handler that serves files from the local test build.
 //
@@ -26,6 +40,11 @@ async function routeHandler(route)
             contentType: 'text/html',
             body: '<!DOCTYPE html><html><body></body></html>'
         });
+    }
+
+    if (url.pathname === '/materialx-worker.js')
+    {
+        return route.fulfill({ contentType: 'application/javascript', body: WORKER_SOURCE });
     }
 
     //
@@ -62,6 +81,31 @@ async function routeHandler(route)
 
 test.describe('Generate Shaders', () =>
 {
+    test('Read and validate documents in a Web Worker', async ({ page }) =>
+    {
+        await page.route('**/*', routeHandler);
+        await page.goto('http://materialx-test/');
+
+        const result = await page.evaluate(() => new Promise((resolve, reject) =>
+        {
+            const worker = new Worker('/materialx-worker.js');
+            worker.onerror = event => reject(new Error(event.message));
+            worker.onmessage = event =>
+            {
+                worker.terminate();
+                resolve(event.data);
+            };
+            worker.postMessage(`<?xml version="1.0"?>
+                <materialx version="1.39">
+                    <constant name="value" type="float">
+                        <input name="value" type="float" value="1.0" />
+                    </constant>
+                </materialx>`);
+        }));
+
+        expect(result.valid, result.message).toBe(true);
+    });
+
     test('Compile Shaders', async ({ page }) =>
     {
         page.on('console', (msg) =>
