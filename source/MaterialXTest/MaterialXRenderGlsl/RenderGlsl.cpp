@@ -13,6 +13,7 @@
 
 #include <MaterialXRender/GeometryHandler.h>
 #include <MaterialXRender/StbImageLoader.h>
+#include <MaterialXRender/Util.h>
 #include <MaterialXTrace/Tracing.h>
 #if defined(MATERIALX_BUILD_OIIO)
 #include <MaterialXRender/OiioImageLoader.h>
@@ -21,6 +22,26 @@
 #include <MaterialXFormat/Util.h>
 
 namespace mx = MaterialX;
+
+TEST_CASE("Render: GLSL screen-space blur ignores scene texcoord flip", "[renderglsl]")
+{
+    mx::FileSearchPath searchPath = mx::getDefaultDataSearchPath();
+    mx::DocumentPtr stdLib = mx::createDocument();
+    mx::loadLibraries({ "libraries" }, searchPath, stdLib);
+
+    mx::ShaderGeneratorPtr shaderGenerator = mx::GlslShaderGenerator::create();
+    shaderGenerator->registerTypeDefs(stdLib);
+    mx::GenContext context(shaderGenerator);
+    context.registerSourceCodeSearchPath(searchPath);
+    context.getOptions().hwTexcoordVerticalFlip = true;
+
+    mx::ShaderPtr shader = mx::createBlurShader(context, stdLib, "screen_space_blur", "gaussian", 1.0f);
+    REQUIRE(shader);
+    const std::string& vertexSource = shader->getSourceCode(mx::Stage::VERTEX);
+    CHECK(vertexSource.find("vd.texcoord_0 = i_texcoord_0") != std::string::npos);
+    CHECK(vertexSource.find("1.0 - i_texcoord_0.y") == std::string::npos);
+    CHECK(context.getOptions().hwTexcoordVerticalFlip);
+}
 
 //
 // Render validation tester for the GLSL shading language

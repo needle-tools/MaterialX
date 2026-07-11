@@ -117,6 +117,7 @@ ShaderPtr createBlurShader(GenContext& context,
     // Generate the shader
     GenContext blurContext = context;
     blurContext.getOptions().fileTextureVerticalFlip = false;
+    blurContext.getOptions().hwTexcoordVerticalFlip = false;
     return createShader(shaderName, blurContext, output);
 }
 
