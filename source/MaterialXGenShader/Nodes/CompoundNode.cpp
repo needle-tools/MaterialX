@@ -52,15 +52,15 @@ void CompoundNode::initialize(const InterfaceElement& element, GenContext& conte
     // complete mode, internal editable inputs are published as graph sockets
     // so applications can bind them as exact path-addressable uniforms.
     const ShaderInterfaceType oldShaderInterfaceType = context.getOptions().shaderInterfaceType;
-    const bool publishCompleteInterface = oldShaderInterfaceType == SHADER_INTERFACE_COMPLETE && !graph.hasSourceUri();
-    if (!publishCompleteInterface)
+    _publishesCompleteInterface = oldShaderInterfaceType == SHADER_INTERFACE_COMPLETE && !graph.hasSourceUri();
+    if (!_publishesCompleteInterface)
     {
         context.getOptions().shaderInterfaceType = SHADER_INTERFACE_REDUCED;
     }
     _rootGraph = ShaderGraph::create(nullptr, graph, context);
     context.getOptions().shaderInterfaceType = oldShaderInterfaceType;
 
-    if (publishCompleteInterface)
+    if (_publishesCompleteInterface)
     {
         const string variablePrefix = _functionName + "_";
         for (ShaderGraphInputSocket* inputSocket : _rootGraph->getInputSockets())

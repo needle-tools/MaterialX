@@ -36,7 +36,19 @@ void addPublicUniforms(ShaderGraph* graph, VariableBlock& publicUniforms, bool r
         {
             if (!publicUniforms.find(inputSocket->getVariable()))
             {
-                publicUniforms.add(inputSocket->getSelf());
+                ShaderPortPtr uniform = std::make_shared<ShaderPort>(
+                    nullptr,
+                    inputSocket->getType(),
+                    inputSocket->getVariable(),
+                    inputSocket->getValue());
+                uniform->setSemantic(inputSocket->getSemantic());
+                uniform->setColorSpace(inputSocket->getColorSpace());
+                uniform->setUnit(inputSocket->getUnit());
+                uniform->setGeomProp(inputSocket->getGeomProp());
+                uniform->setPath(inputSocket->getPath());
+                uniform->setFlags(inputSocket->getFlags());
+                uniform->setMetadata(inputSocket->getMetadata());
+                publicUniforms.add(uniform);
             }
         }
     }
@@ -46,7 +58,10 @@ void addPublicUniforms(ShaderGraph* graph, VariableBlock& publicUniforms, bool r
         ShaderGraph* subgraph = node->getImplementation().getGraph();
         if (subgraph)
         {
-            addPublicUniforms(subgraph, publicUniforms, true);
+            const CompoundNode* compound = dynamic_cast<const CompoundNode*>(&node->getImplementation());
+            const bool requireSubgraphPath =
+                requireGraphPath || !compound || !compound->publishesCompleteInterface();
+            addPublicUniforms(subgraph, publicUniforms, requireSubgraphPath);
         }
     }
 }

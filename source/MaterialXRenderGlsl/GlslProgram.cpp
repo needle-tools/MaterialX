@@ -1108,7 +1108,7 @@ const GlslProgram::InputMap& GlslProgram::updateUniformsList()
 
 int GlslProgram::mapTypeToOpenGLType(TypeDesc type)
 {
-    if (type == Type::INTEGER)
+    if (type == Type::INTEGER || type == Type::STRING)
         return GL_INT;
     else if (type == Type::BOOLEAN)
         return GL_BOOL;

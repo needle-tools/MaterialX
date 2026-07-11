@@ -31,9 +31,12 @@ class MX_GENSHADER_API CompoundNode : public ShaderNodeImpl
 
     ShaderGraph* getGraph() const override { return _rootGraph.get(); }
 
+    bool publishesCompleteInterface() const { return _publishesCompleteInterface; }
+
   protected:
     ShaderGraphPtr _rootGraph;
     string _functionName;
+    bool _publishesCompleteInterface = false;
 };
 
 MATERIALX_NAMESPACE_END

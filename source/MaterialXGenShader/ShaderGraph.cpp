@@ -949,7 +949,9 @@ void ShaderGraph::finalize(GenContext& context)
                 {
                     // Check if the type is editable otherwise we can't
                     // publish the input as an editable uniform.
-                    if (!input->getType().isClosure() && node->isEditable(*input) && input->isUniform())
+                    if (!input->getType().isClosure() &&
+                        node->isEditable(*input) &&
+                        (input->isUniform() || input->getType() == Type::FILENAME))
                     {
                         // Use a consistent naming convention: <nodename>_<inputname>
                         // so application side can figure out what uniforms to set
