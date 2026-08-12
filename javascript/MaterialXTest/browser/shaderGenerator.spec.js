@@ -14,14 +14,15 @@ const MIME_TYPES = {
 };
 
 const WORKER_SOURCE = `
-importScripts('/_build/JsMaterialXGenShader.js');
+import MaterialX from '/_build/JsMaterialXGenShader.js';
 self.onmessage = async (event) => {
     try {
     const mx = await MaterialX();
     const doc = mx.createDocument();
     await mx.readFromXmlString(doc, event.data, '');
-    const result = doc.validate();
-    self.postMessage({ valid: result.valid, message: result.message || '' });
+    const message = {};
+    const valid = doc.validate(message);
+    self.postMessage({ valid, message: message.message || '' });
     } catch (error) {
     self.postMessage({ valid: false, message: error?.message || String(error) });
     }
@@ -88,7 +89,7 @@ test.describe('Generate Shaders', () =>
 
         const result = await page.evaluate(() => new Promise((resolve, reject) =>
         {
-            const worker = new Worker('/materialx-worker.js');
+            const worker = new Worker('/materialx-worker.js', { type: 'module' });
             worker.onerror = event => reject(new Error(event.message));
             worker.onmessage = event =>
             {
@@ -122,11 +123,11 @@ test.describe('Generate Shaders', () =>
 
         await page.route('**/*', routeHandler);
         await page.goto('http://materialx-test/');
-        await page.addScriptTag({ url: '/_build/JsMaterialXGenShader.js' });
 
         const { error, generators } = await page.evaluate(async () =>
         {
-            const mx = await window.MaterialX();
+            const { default: MaterialX } = await import('/_build/JsMaterialXGenShader.js');
+            const mx = await MaterialX();
 
             const doc = mx.createDocument();
             const ssName = 'SR_default';
