@@ -138,6 +138,16 @@ set_target_properties(JsMaterialXGenShader
     INSTALL_RPATH "${MATERIALX_UP_TWO_RPATH}"
     SOVERSION "${MATERIALX_MAJOR_VERSION}")
 
+# Webpack tries to bundle Emscripten's Node-only import.
+# See https://github.com/emscripten-core/emscripten/issues/21899
+foreach(JS_TARGET JsMaterialXCore JsMaterialXGenShader)
+    add_custom_command(TARGET ${JS_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DINPUT_FILE=$<TARGET_FILE:${JS_TARGET}>
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/patch_webpack_import.cmake
+        COMMENT "Patching Emscripten's Node import for Webpack")
+endforeach()
+
 target_link_libraries(JsMaterialXCore
     PUBLIC MaterialXCore
     PUBLIC MaterialXFormat
